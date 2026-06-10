@@ -13,6 +13,12 @@ return new class extends Migration
     {
         Schema::create('approval_logs', function (Blueprint $table) {
             $table->id();
+            //links to SY's booking requests
+            $table->unsignedBigInteger('request_id');
+            $table->unsignedBigInteger('approver_id'); 
+            $table->string('action'); // approved or rejected
+            $table->text('remarks')->nullable();
+            $table->integer('tier_level'); // which tier this action satisfied
             $table->timestamps();
         });
     }

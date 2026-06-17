@@ -19,6 +19,10 @@ class Facility extends Model
         'approval_tier',
     ];
 
+    protected $casts = [
+        'approval_tier' => 'integer',
+    ];
+
     /**
      * Get the operational rules associated with this facility.
      */

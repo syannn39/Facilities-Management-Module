@@ -1,84 +1,112 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useState } from 'react'
 import './App.css'
+import api from './api'
+import Login from './pages/Login'
+import TenantView from './pages/TenantView'
+import AdminView from './pages/AdminView'
 
-// Import the functional feature modules we built in Phase 6
-import BookingForm from './components/BookingForm'
-import QrScanner from './components/QrScanner'
-
+/**
+ * App.jsx — login gate + role router.
+ *
+ * Flow:
+ *  1. On mount, check localStorage for an existing token → call /me to
+ *     re-validate it (handles page refresh without re-login).
+ *  2. If no valid session → show <Login />.
+ *  3. After login success → show <TenantView> (Resident) or <AdminView> (Manager).
+ */
 function App() {
-  const [count, setCount] = useState(0)
-  
-  // For immediate local testing, let's target an entity ID instance.
-  // In a full application, these values will dynamically change when a resident 
-  // clicks on a specific asset from the "Browse Facilities" dashboard grid view.
-  const [activeFacilityId, setActiveFacilityId] = useState(1)
-  const [activeBookingId, setActiveBookingId] = useState(1)
+  const [user,            setUser]            = useState(null)
+  const [checkingSession, setCheckingSession] = useState(true)
+
+  useEffect(() => {
+    const token      = localStorage.getItem('token')
+    const cachedUser = localStorage.getItem('user')
+
+    if (token && cachedUser) {
+      setUser(JSON.parse(cachedUser))          // show cached state immediately
+      api.get('/me')
+        .then(res => setUser(res.data))        // then confirm with server
+        .catch(() => handleLogout())           // token expired / invalid → logout
+    }
+    setCheckingSession(false)
+  }, [])
+
+  const handleLogout = async () => {
+    try { await api.post('/logout') } catch { /* token already invalid is fine */ }
+    localStorage.removeItem('token')
+    localStorage.removeItem('user')
+    setUser(null)
+  }
+
+  // Blank while we check localStorage to avoid a flash of the login page
+  if (checkingSession) return null
+
+  // ── Not logged in ──────────────────────────────────────────────────────────
+  if (!user) return <Login onLoginSuccess={setUser} />
+
+  // ── Logged in ──────────────────────────────────────────────────────────────
+  const isManager = user.role === 'Manager'
 
   return (
     <>
-      {/* HEADER HERO AREA */}
-      <section id="center" style={{ paddingBottom: '20px' }}>
-        <div className="hero">
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Facilities Management Module</h1>
-          <p style={{ color: '#666' }}>
-            Multi-Tenant Automated Facility Scheduling & Verification Engine
-          </p>
-        </div>
-        
-        {/* Debug Utility: Feel free to delete or keep for testing state updates */}
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-          style={{ marginTop: '10px', padding: '8px 16px', cursor: 'pointer' }}
-        >
-          Session Interactive Operations Check: {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      {/* CORE FYP COMPONENT WORKSPACE AREA */}
-      <section id="next-steps" style={{ display: 'flex', flexWrap: 'wrap', gap: '30px', justifyContent: 'center', padding: '20px' }}>
-        
-        {/* Workspace Block 1: Real-Time Dynamic Scheduler Submissions (FR1 / FR3) */}
-        <div id="docs" style={{ flex: '1', minWidth: '320px', maxWidth: '480px', background: '#fff', padding: '20px', borderRadius: '8px' }}>
-          <h2 style={{ borderBottom: '2px solid #0066cc', paddingBottom: '8px', color: '#2c3e50' }}>
-            New Reservation Request
-          </h2>
-          <p style={{ fontSize: '14px', color: '#7f8c8d' }}>
-            Algorithm 2 handles cross-tenant conflict detection automatically upon clicking submission.
-          </p>
-          
-          <div style={{ marginTop: '20px' }}>
-            <BookingForm facilityId={activeFacilityId} />
-          </div>
+      {/* Top navigation bar */}
+      <nav style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0 24px',
+        height: 64,
+        background: isManager ? '#1a1a2e' : '#0f3460',
+        color: '#fff',
+        fontFamily: 'system-ui, Arial, sans-serif',
+        boxSizing: 'border-box',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 22 }}>🏢</span>
+          <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-0.3px' }}>PropertyHub</span>
+          <span style={{
+            marginLeft: 8,
+            background: 'rgba(255,255,255,0.15)',
+            borderRadius: 20,
+            padding: '2px 10px',
+            fontSize: 12,
+          }}>
+            {isManager ? 'Admin Dashboard' : 'Resident Portal'}
+          </span>
         </div>
 
-        {/* Workspace Block 2: Physical Location Verification Entry (FR5) */}
-        <div id="social" style={{ flex: '1', minWidth: '320px', maxWidth: '480px', background: '#fff', padding: '20px', borderRadius: '8px' }}>
-          <h2 style={{ borderBottom: '2px solid #bd2130', paddingBottom: '8px', color: '#2c3e50' }}>
-            Physical Gate Verification
-          </h2>
-          <p style={{ fontSize: '14px', color: '#7f8c8d' }}>
-            Algorithm 3 enforces camera access permissions to capture tokens within a 15-minute arrival window.
-          </p>
-
-          <div style={{ marginTop: '20px' }}>
-            <QrScanner bookingId={activeBookingId} />
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ fontSize: 13, opacity: 0.85 }}>
+            👤 {user.name}
+          </span>
+          <span style={{
+            background: isManager ? '#e74c3c' : '#27ae60',
+            borderRadius: 20,
+            padding: '2px 10px',
+            fontSize: 11,
+            fontWeight: 600,
+          }}>
+            {user.role}
+          </span>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '6px 14px',
+              background: 'rgba(255,255,255,0.15)',
+              border: '1px solid rgba(255,255,255,0.3)',
+              borderRadius: 6,
+              color: '#fff',
+              fontSize: 13,
+              cursor: 'pointer',
+            }}
+          >
+            Log Out
+          </button>
         </div>
+      </nav>
 
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer" style={{ height: '100px' }}></section>
+      {/* Role-specific view */}
+      {isManager ? <AdminView /> : <TenantView />}
     </>
   )
 }

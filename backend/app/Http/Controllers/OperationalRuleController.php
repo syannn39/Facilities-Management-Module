@@ -19,7 +19,22 @@ class OperationalRuleController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        // 1. Validate the incoming request data
+        $validatedData = $request->validate([
+            'facility_id' => 'required|integer', // keep simple for testing 
+            'max_capacity' => 'required|integer|min:1',
+            'approval_tier' => 'required|integer|min:0',
+            'grace_period_minutes' => 'required|integer|min:0',
+        ]);
+
+        // 2. Create a new OperationalRule in the database
+        $rule = \App\Models\OperationalRule::create($validatedData);
+
+        // 3. Return a response indicating success to frontend 
+        return response()->json([
+            'message' => 'Operational rule created successfully.',
+            'data' => $rule
+        ], 201);
     }
 
     /**

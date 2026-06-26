@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\FacilityController;
 use App\Http\Controllers\OperationalRuleController;
 use App\Http\Controllers\WorkflowTierController;
 use App\Http\Controllers\ApprovalLogController;
@@ -21,6 +22,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me',      [AuthController::class, 'me']);
+
+    // Browse Facilities page: returns this tenant's facility catalog only
+    // (TenantScope on Facility::class filters automatically — School users
+    // see school facilities, Residential users see residential facilities).
+    Route::get('/facilities', [FacilityController::class, 'index']);
 
     // FR1 & FR3: Submit a booking (instant or request-based)
     Route::post('/bookings', [BookingController::class, 'store']);

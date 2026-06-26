@@ -9,6 +9,7 @@ class Tenant extends Model
 {
     protected $fillable = [
         'name',
+        'type', // 'residential' | 'school'
     ];
 
     public function users(): HasMany

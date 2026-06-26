@@ -62,12 +62,21 @@ class AuthController extends Controller
 
     private function userPayload(User $user): array
     {
+        // Eager-load tenant so the frontend knows which experience to render
+        // (e.g. School theme vs Residential theme) without a second request.
+        $user->loadMissing('tenant');
+
         return [
             'id'        => $user->id,
             'name'      => $user->name,
             'email'     => $user->email,
             'role'      => $user->role,       // 'Resident' or 'Manager'
             'tenant_id' => $user->tenant_id,
+            'tenant'    => $user->tenant ? [
+                'id'   => $user->tenant->id,
+                'name' => $user->tenant->name,
+                'type' => $user->tenant->type, // 'residential' | 'school'
+            ] : null,
         ];
     }
 }

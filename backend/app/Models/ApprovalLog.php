@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ApprovalLog extends Model
 {
     protected $fillable = [
-        'booking_id',
+        'request_id',
         'approver_id',
         'action',
         'remarks',
@@ -17,10 +17,13 @@ class ApprovalLog extends Model
 
     /**
      * The booking (request) this log entry refers to.
+     * NOTE: the approval_logs migration stores this as `request_id`
+     * (there is no separate booking_requests table — Booking doubles
+     * as the request record), so the FK must be specified explicitly.
      */
     public function booking(): BelongsTo
     {
-        return $this->belongsTo(Booking::class);
+        return $this->belongsTo(Booking::class, 'request_id');
     }
 
     /**

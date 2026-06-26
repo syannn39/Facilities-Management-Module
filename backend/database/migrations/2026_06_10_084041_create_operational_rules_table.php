@@ -13,6 +13,10 @@ return new class extends Migration
     {
         Schema::create('operational_rules', function (Blueprint $table) {
             $table->id();
+            // Required by the BelongsToTenant trait / TenantScope (Chapter 4: every
+            // critical table is scoped by tenant_id). This was missing before, which
+            // crashed any query on this table with "no such column: operational_rules.tenant_id".
+            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
             // link to SY's facilities table
             $table->unsignedBigInteger('facility_id');
             // governance limits from chp4 algorithms

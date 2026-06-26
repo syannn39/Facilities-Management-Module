@@ -52,10 +52,10 @@ class DatabaseSeeder extends Seeder
             $facility->save();
 
             $rule = new OperationalRule([
-                'facility_id'            => $facility->id,
-                'max_capacity'           => $def['max_capacity'],
-                'approval_tier'          => $def['approval_tier'],
-                'checkin_window_minutes' => 15,
+                'facility_id'           => $facility->id,
+                'max_capacity'          => $def['max_capacity'],
+                'approval_tier'         => $def['approval_tier'],
+                'grace_period_minutes'  => 15,
             ]);
             $rule->tenant_id = $tenant->id;
             $rule->save();

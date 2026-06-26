@@ -14,13 +14,13 @@ class OperationalRule extends Model
         'facility_id',
         'max_capacity',
         'approval_tier',
-        'checkin_window_minutes',
+        'grace_period_minutes',
     ];
 
     protected $casts = [
         'max_capacity' => 'integer',
         'approval_tier' => 'integer',
-        'checkin_window_minutes' => 'integer',
+        'grace_period_minutes' => 'integer',
     ];
 
     /**

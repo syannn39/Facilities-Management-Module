@@ -28,19 +28,23 @@ Route::middleware('auth:sanctum')->group(function () {
     // FR5: QR check-in
     Route::post('/bookings/{id}/check-in', [BookingController::class, 'checkIn']);
 
-});
+    // ── Governance / Testing ─────────────────────────────────────────────────
+    // NOTE: moved inside auth:sanctum — these were previously open to anyone,
+    // which contradicts the report's NFR (strict access control / tenant isolation).
+    Route::prefix('governance')->group(function () {
+        Route::get('/rules/{facility_id}', [OperationalRuleController::class, 'show']);
+        Route::post('/rules',              [OperationalRuleController::class, 'store']);
+    });
 
-// ── Governance / Testing (keep your existing routes) ─────────────────────────
-Route::prefix('governance')->group(function () {
-    Route::get('/rules/{facility_id}', [OperationalRuleController::class, 'show']);
-    Route::post('/rules',              [OperationalRuleController::class, 'store']);
-});
+    Route::prefix('workflow')->group(function () {
+        // NOTE: 'process' and 'store' were both bound to POST '/', so 'store'
+        // could never be reached. 'process' is the one actually called from
+        // the frontend, so it keeps the bare path; 'store' gets its own path.
+        Route::post('/',            [WorkflowTierController::class, 'process']);
+        Route::post('/rules',       [WorkflowTierController::class, 'store']);
+        Route::put('/{tier_id}',    [WorkflowTierController::class, 'update']);
+        Route::delete('/{tier_id}', [WorkflowTierController::class, 'destroy']);
+    });
 
-Route::prefix('workflow')->group(function () {
-    Route::post('/',           [WorkflowTierController::class, 'process']);
-    Route::post('/',           [WorkflowTierController::class, 'store']);
-    Route::put('/{tier_id}',   [WorkflowTierController::class, 'update']);
-    Route::delete('/{tier_id}',[WorkflowTierController::class, 'destroy']);
+    Route::get('/approval-logs/{request_id}', [ApprovalLogController::class, 'index']);
 });
-
-Route::get('/approval-logs/{request_id}', [ApprovalLogController::class, 'index']);

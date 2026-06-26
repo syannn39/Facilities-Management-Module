@@ -28,8 +28,14 @@ export default function Login({ onLoginSuccess }) {
   };
 
   // Quick-fill helpers so you don't have to type during testing
-  const fill = (role) => {
-    setEmail(role === 'Manager' ? 'manager@test.com' : 'resident@test.com');
+  const TEST_ACCOUNTS = {
+    resident: 'resident@test.com', // Sunrise Residences (residential)
+    manager:  'manager@test.com',  // Sunrise Residences (residential)
+    student:  'student@test.com',  // Greenwood International School
+    staff:    'staff@test.com',    // Greenwood International School
+  };
+  const fill = (accountKey) => {
+    setEmail(TEST_ACCOUNTS[accountKey]);
     setPassword('password');
   };
 
@@ -79,16 +85,29 @@ export default function Login({ onLoginSuccess }) {
         {/* Quick-fill for testing */}
         <div style={styles.quickFill}>
           <p style={styles.quickFillTitle}>Test Accounts (run seeder first)</p>
+
+          <p style={styles.quickFillGroupLabel}>🏢 Sunrise Residences</p>
           <div style={styles.quickFillBtns}>
-            <button style={styles.chipBtn} onClick={() => fill('Resident')}>
+            <button style={styles.chipBtn} onClick={() => fill('resident')}>
               👤 Resident
             </button>
-            <button style={styles.chipBtn} onClick={() => fill('Manager')}>
-              🔑 Manager / Admin
+            <button style={styles.chipBtn} onClick={() => fill('manager')}>
+              🔑 Manager
             </button>
           </div>
+
+          <p style={styles.quickFillGroupLabel}>🎓 Greenwood International School</p>
+          <div style={styles.quickFillBtns}>
+            <button style={styles.chipBtn} onClick={() => fill('student')}>
+              👤 Student
+            </button>
+            <button style={styles.chipBtn} onClick={() => fill('staff')}>
+              🔑 Staff
+            </button>
+          </div>
+
           <p style={styles.quickFillHint}>
-            Password for both: <code>password</code>
+            Password for all: <code>password</code>
           </p>
         </div>
       </div>
@@ -189,6 +208,12 @@ const styles = {
     color: '#999',
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
+  },
+  quickFillGroupLabel: {
+    margin: '12px 0 6px',
+    fontSize: 12,
+    color: '#666',
+    fontWeight: 600,
   },
   quickFillBtns: {
     display: 'flex',

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useEffect, useState } from 'react';
+import api from '../api';
 
 export default function BookingForm({ facilityId }) {
     const [formData, setFormData] = useState({
@@ -11,26 +11,27 @@ export default function BookingForm({ facilityId }) {
     const [statusMessage, setStatusMessage] = useState('');
     const [isError, setIsError] = useState(false);
 
+    // Reset the form whenever the selected facility changes (e.g. user picks
+    // a different facility from Browse Facilities) so stale values from a
+    // previous facility don't carry over into a new request.
+    useEffect(() => {
+        setFormData({ startTime: '', endTime: '', purpose: '', guests: 0 });
+        setStatusMessage('');
+        setIsError(false);
+    }, [facilityId]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setStatusMessage('');
         setIsError(false);
 
         try {
-            // Retrieve token securely from browser local storage storage
-            const token = localStorage.getItem('token');
-
-            const response = await axios.post('http://127.0.0.1:8000/api/bookings', {
+            const response = await api.post('/bookings', {
                 facility_id: facilityId,
                 start_time: formData.startTime,
                 end_time: formData.endTime,
                 purpose_of_use: formData.purpose,
                 guest_count: parseInt(formData.guests, 10)
-            }, {
-                headers: { 
-                    Authorization: `Bearer ${token}`,
-                    Accept: 'application/json'
-                }
             });
 
             if (response.data.success) {

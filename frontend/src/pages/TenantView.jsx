@@ -1,19 +1,24 @@
+import { useState } from 'react';
 import BookingForm from '../components/BookingForm';
 import QrScanner from '../components/QrScanner';
+import FacilityList from '../components/FacilityList';
 
 /**
- * TenantView — the page a Resident sees after login.
- * This is exactly your original App.jsx content, just moved here so App.jsx
- * can act as the login gate / role router instead.
+ * TenantView — the page a Resident (or Student, for a School tenant) sees
+ * after login.
  *
- * BookingForm and QrScanner are UNCHANGED — they still read the token from
- * localStorage exactly as you wrote them.
+ * Browse Facilities (FacilityList) now drives which facility BookingForm
+ * targets — previously this was hardcoded to facilityId=1. Because
+ * GET /api/facilities is automatically scoped to the logged-in user's
+ * tenant on the backend, a School account and a Residential account land
+ * on this exact same component but see two different facility catalogs.
  */
 export default function TenantView() {
-  // facilityId=1 and bookingId=1 match your original hardcoded values.
-  // You can make these dynamic later when you add a Browse Facilities page.
-  const activeFacilityId = 1;
-  const activeBookingId  = 1;
+  const [activeFacilityId, setActiveFacilityId] = useState(null);
+  // bookingId=1 matches the original hardcoded value — wiring this up to
+  // the booking actually created by BookingForm is a separate follow-up
+  // (would need BookingForm to report back the new booking's id).
+  const activeBookingId = 1;
 
   return (
     <>
@@ -22,6 +27,23 @@ export default function TenantView() {
         id="next-steps"
         style={{ display: 'flex', flexWrap: 'wrap', gap: '30px', justifyContent: 'center', padding: '20px' }}
       >
+        {/* Block 0: Browse Facilities — tenant-scoped catalog */}
+        <div
+          id="browse-facilities"
+          style={{ flex: '1 1 100%', maxWidth: '1000px', background: '#fff', padding: '20px', borderRadius: '8px' }}
+        >
+          <h2 style={{ borderBottom: '2px solid #6f42c1', paddingBottom: '8px', color: '#2c3e50' }}>
+            Browse Facilities
+          </h2>
+          <p style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '16px' }}>
+            Showing only the facilities available at your property. Select one to start a booking.
+          </p>
+          <FacilityList
+            onSelectFacility={setActiveFacilityId}
+            selectedFacilityId={activeFacilityId}
+          />
+        </div>
+
         {/* Block 1: Real-Time Dynamic Scheduler Submissions (FR1 / FR3) */}
         <div
           id="docs"
@@ -34,7 +56,13 @@ export default function TenantView() {
             Algorithm 2 handles cross-tenant conflict detection automatically upon clicking submission.
           </p>
           <div style={{ marginTop: '20px' }}>
-            <BookingForm facilityId={activeFacilityId} />
+            {activeFacilityId ? (
+              <BookingForm facilityId={activeFacilityId} />
+            ) : (
+              <p style={{ fontSize: '13px', color: '#aaa' }}>
+                ↑ Pick a facility above first.
+              </p>
+            )}
           </div>
         </div>
 

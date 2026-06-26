@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
-import axios from 'axios';
+import api from '../api';
 
 export default function QrScanner({ bookingId }) {
     const [scanFeedback, setScanFeedback] = useState('');
@@ -20,14 +20,8 @@ export default function QrScanner({ bookingId }) {
                 setScanFeedback("Processing scanned token data...");
 
                 try {
-                    const token = localStorage.getItem('token');
-                    const response = await axios.post(`http://127.0.0.1:8000/api/bookings/${bookingId}/check-in`, {
+                    const response = await api.post(`/bookings/${bookingId}/check-in`, {
                         qr_data: decodedText
-                    }, {
-                        headers: { 
-                            Authorization: `Bearer ${token}`,
-                            Accept: 'application/json'
-                        }
                     });
 
                     if (response.data.success) {

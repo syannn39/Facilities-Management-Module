@@ -6,6 +6,26 @@ import TenantView from './pages/TenantView'
 import AdminView from './pages/AdminView'
 
 /**
+ * Per-industry branding for the navbar. Add a new entry here when a third
+ * tenant type (e.g. 'corporate') is introduced — everything else (routing,
+ * data fetching, isolation) already works without changes since it's all
+ * driven by the backend's tenant_id scoping, not this map.
+ */
+const TENANT_THEME = {
+  school: {
+    icon: '🎓',
+    label: 'CampusHub',
+    navBg: '#0b5e3b',
+  },
+  residential: {
+    icon: '🏢',
+    label: 'PropertyHub',
+    navBg: '#0f3460',
+  },
+}
+const DEFAULT_THEME = TENANT_THEME.residential
+
+/**
  * App.jsx — login gate + role router.
  *
  * Flow:
@@ -46,6 +66,7 @@ function App() {
 
   // ── Logged in ──────────────────────────────────────────────────────────────
   const isManager = user.role === 'Manager'
+  const theme = TENANT_THEME[user.tenant?.type] || DEFAULT_THEME
 
   return (
     <>
@@ -56,14 +77,14 @@ function App() {
         alignItems: 'center',
         padding: '0 24px',
         height: 64,
-        background: isManager ? '#1a1a2e' : '#0f3460',
+        background: isManager ? '#1a1a2e' : theme.navBg,
         color: '#fff',
         fontFamily: 'system-ui, Arial, sans-serif',
         boxSizing: 'border-box',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 22 }}>🏢</span>
-          <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-0.3px' }}>PropertyHub</span>
+          <span style={{ fontSize: 22 }}>{theme.icon}</span>
+          <span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '-0.3px' }}>{theme.label}</span>
           <span style={{
             marginLeft: 8,
             background: 'rgba(255,255,255,0.15)',
@@ -73,6 +94,15 @@ function App() {
           }}>
             {isManager ? 'Admin Dashboard' : 'Resident Portal'}
           </span>
+          {user.tenant?.name && (
+            <span style={{
+              marginLeft: 4,
+              fontSize: 12,
+              opacity: 0.75,
+            }}>
+              · {user.tenant.name}
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

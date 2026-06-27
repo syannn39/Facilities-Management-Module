@@ -28,6 +28,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // see school facilities, Residential users see residential facilities).
     Route::get('/facilities', [FacilityController::class, 'index']);
 
+    // Booking modal "Available Time Slots" list — only slots flagged
+    // available=true are selectable on the frontend.
+    Route::get('/facilities/{id}/availability', [FacilityController::class, 'availability']);
+
+    // My Bookings page (Figure 4.1.6)
+    Route::get('/bookings', [BookingController::class, 'index']);
+
     // FR1 & FR3: Submit a booking (instant or request-based)
     Route::post('/bookings', [BookingController::class, 'store']);
 

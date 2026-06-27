@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\SchedulingService;
 use App\Services\CheckInService;
+use App\Models\Booking;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Exception;
@@ -20,6 +21,27 @@ class BookingController extends Controller
     {
         $this->schedulingService = $schedulingService;
         $this->checkInService = $checkInService;
+    }
+
+    /**
+     * GET /api/bookings  (auth:sanctum)
+     *
+     * Powers the "My Bookings" page (Figure 4.1.6). Only the logged-in
+     * user's own bookings — TenantScope already restricts this to their
+     * tenant, and we additionally filter by user_id since a resident
+     * shouldn't see other residents' bookings within the same property.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $bookings = Booking::with('facility')
+            ->where('user_id', $request->user()->id)
+            ->orderByDesc('start_time')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $bookings,
+        ]);
     }
 
     /**
@@ -42,6 +64,7 @@ class BookingController extends Controller
             
             // Invoke Algorithm 1 & 2 via our service layer
             $booking = $this->schedulingService->validateAndCreateBooking($validated, $userId);
+            $booking->load('facility');
 
             $message = ($booking->status === 'Pending') 
                 ? 'Your booking requires manager approval. You will be notified once reviewed.'

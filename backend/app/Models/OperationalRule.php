@@ -15,6 +15,8 @@ class OperationalRule extends Model
         'max_capacity',
         'approval_tier',
         'grace_period_minutes',
+        'open_time',
+        'close_time',
     ];
 
     protected $casts = [

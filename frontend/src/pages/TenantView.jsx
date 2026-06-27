@@ -1,90 +1,105 @@
 import { useState } from 'react';
-import BookingForm from '../components/BookingForm';
-import QrScanner from '../components/QrScanner';
 import FacilityList from '../components/FacilityList';
+import MyBookings from '../components/MyBookings';
 
 /**
  * TenantView — the page a Resident (or Student, for a School tenant) sees
- * after login.
+ * after login. Mirrors the reference design's sidebar layout: a left nav
+ * with "Browse Facilities" / "My Bookings", and the corresponding page on
+ * the right. Booking itself now happens inside a modal triggered from a
+ * facility card's "Book Now" button (see FacilityList + BookingModal),
+ * not on this page directly.
  *
- * Browse Facilities (FacilityList) now drives which facility BookingForm
- * targets — previously this was hardcoded to facilityId=1. Because
- * GET /api/facilities is automatically scoped to the logged-in user's
- * tenant on the backend, a School account and a Residential account land
- * on this exact same component but see two different facility catalogs.
+ * bookingsRefreshKey: bumped every time a booking is created in
+ * FacilityList. Passed to <MyBookings key={bookingsRefreshKey}> so a fresh
+ * GET /bookings always runs the next time that tab is shown — this doesn't
+ * rely on the tab switch itself happening to unmount/remount MyBookings
+ * (which was the previous, more fragile assumption); it explicitly forces
+ * a refetch regardless of navigation order.
  */
 export default function TenantView() {
-  const [activeFacilityId, setActiveFacilityId] = useState(null);
-  // bookingId=1 matches the original hardcoded value — wiring this up to
-  // the booking actually created by BookingForm is a separate follow-up
-  // (would need BookingForm to report back the new booking's id).
-  const activeBookingId = 1;
+  const [activeTab, setActiveTab] = useState('facilities'); // 'facilities' | 'bookings'
+  const [bookingsRefreshKey, setBookingsRefreshKey] = useState(0);
+
+  const navItems = [
+    { key: 'facilities', label: 'Browse Facilities', icon: '🏠' },
+    { key: 'bookings',   label: 'My Bookings',        icon: '📋' },
+  ];
 
   return (
-    <>
-      {/* CORE FYP COMPONENT WORKSPACE AREA */}
-      <section
-        id="next-steps"
-        style={{ display: 'flex', flexWrap: 'wrap', gap: '30px', justifyContent: 'center', padding: '20px' }}
-      >
-        {/* Block 0: Browse Facilities — tenant-scoped catalog */}
-        <div
-          id="browse-facilities"
-          style={{ flex: '1 1 100%', maxWidth: '1000px', background: '#fff', padding: '20px', borderRadius: '8px' }}
-        >
-          <h2 style={{ borderBottom: '2px solid #6f42c1', paddingBottom: '8px', color: '#2c3e50' }}>
-            Browse Facilities
-          </h2>
-          <p style={{ fontSize: '14px', color: '#7f8c8d', marginBottom: '16px' }}>
-            Showing only the facilities available at your property. Select one to start a booking.
-          </p>
-          <FacilityList
-            onSelectFacility={setActiveFacilityId}
-            selectedFacilityId={activeFacilityId}
-          />
-        </div>
+    <div style={styles.layout}>
+      <aside style={styles.sidebar}>
+        {navItems.map((item) => (
+          <button
+            key={item.key}
+            onClick={() => setActiveTab(item.key)}
+            style={{
+              ...styles.navItem,
+              ...(activeTab === item.key ? styles.navItemActive : {}),
+            }}
+          >
+            <span style={{ marginRight: 8 }}>{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+      </aside>
 
-        {/* Block 1: Real-Time Dynamic Scheduler Submissions (FR1 / FR3) */}
-        <div
-          id="docs"
-          style={{ flex: '1', minWidth: '320px', maxWidth: '480px', background: '#fff', padding: '20px', borderRadius: '8px' }}
-        >
-          <h2 style={{ borderBottom: '2px solid #0066cc', paddingBottom: '8px', color: '#2c3e50' }}>
-            New Reservation Request
-          </h2>
-          <p style={{ fontSize: '14px', color: '#7f8c8d' }}>
-            Algorithm 2 handles cross-tenant conflict detection automatically upon clicking submission.
-          </p>
-          <div style={{ marginTop: '20px' }}>
-            {activeFacilityId ? (
-              <BookingForm facilityId={activeFacilityId} />
-            ) : (
-              <p style={{ fontSize: '13px', color: '#aaa' }}>
-                ↑ Pick a facility above first.
-              </p>
-            )}
-          </div>
-        </div>
+      <main style={styles.content}>
+        <h2 style={styles.pageTitle}>
+          {activeTab === 'facilities' ? 'Browse Facilities' : 'My Bookings'}
+        </h2>
 
-        {/* Block 2: Physical Location Verification Entry (FR5) */}
-        <div
-          id="social"
-          style={{ flex: '1', minWidth: '320px', maxWidth: '480px', background: '#fff', padding: '20px', borderRadius: '8px' }}
-        >
-          <h2 style={{ borderBottom: '2px solid #bd2130', paddingBottom: '8px', color: '#2c3e50' }}>
-            Physical Gate Verification
-          </h2>
-          <p style={{ fontSize: '14px', color: '#7f8c8d' }}>
-            Algorithm 3 enforces camera access permissions to capture tokens within a 15-minute arrival window.
-          </p>
-          <div style={{ marginTop: '20px' }}>
-            <QrScanner bookingId={activeBookingId} />
-          </div>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer" style={{ height: '100px' }}></section>
-    </>
+        {activeTab === 'facilities' ? (
+          <FacilityList onBookingCreated={() => setBookingsRefreshKey((k) => k + 1)} />
+        ) : (
+          <MyBookings key={bookingsRefreshKey} />
+        )}
+      </main>
+    </div>
   );
 }
+
+const styles = {
+  layout: {
+    display: 'flex',
+    minHeight: 'calc(100vh - 64px)', // 64px matches App.jsx's navbar height
+    fontFamily: 'system-ui, Arial, sans-serif',
+    background: '#f7f8fa',
+  },
+  sidebar: {
+    width: 220,
+    background: '#fff',
+    borderRight: '1px solid #eee',
+    padding: '20px 12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  navItem: {
+    display: 'flex',
+    alignItems: 'center',
+    textAlign: 'left',
+    padding: '10px 14px',
+    borderRadius: 8,
+    border: 'none',
+    background: 'none',
+    fontSize: 14,
+    color: '#444',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  },
+  navItemActive: {
+    background: '#eaf2ff',
+    color: '#0d4cd3',
+    fontWeight: 600,
+  },
+  content: {
+    flex: 1,
+    padding: '28px 32px',
+  },
+  pageTitle: {
+    margin: '0 0 18px',
+    fontSize: 22,
+    color: '#1a1a2e',
+  },
+};

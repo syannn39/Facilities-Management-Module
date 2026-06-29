@@ -51,14 +51,14 @@ export default function FacilityList({ onBookingCreated }) {
 
       <div style={styles.grid}>
         {facilities.map((facility) => {
-          const requiresApproval = facility.approval_tier > 0;
+          const requiresApproval = (facility.operational_rule?.approval_tier ?? 0) > 0;
 
           return (
-            <div key={facility.id} style={styles.card}>
+            <div key={facility.facility_id} style={styles.card}>
               <div style={styles.cardTopRow}>
                 <div>
                   <div style={styles.cardName}>{facility.name}</div>
-                  {facility.description && <div style={styles.cardDesc}>{facility.description}</div>}
+                  {facility.category && <div style={styles.cardDesc}>{facility.category}</div>}
                 </div>
                 <span style={styles.availableBadge}>Available</span>
               </div>
@@ -69,9 +69,9 @@ export default function FacilityList({ onBookingCreated }) {
                     👥 Capacity: {facility.operational_rule.max_capacity} people
                   </span>
                 )}
-                {facility.operational_rule?.open_time && facility.operational_rule?.close_time && (
+                {facility.operational_rule?.opening_time && facility.operational_rule?.closing_time && (
                   <span style={styles.metaLine}>
-                    🕐 {facility.operational_rule.open_time.slice(0, 5)} - {facility.operational_rule.close_time.slice(0, 5)}
+                    🕐 {facility.operational_rule.opening_time.slice(0, 5)} - {facility.operational_rule.closing_time.slice(0, 5)}
                   </span>
                 )}
                 {requiresApproval && <span style={styles.requiresApproval}>Requires Approval</span>}

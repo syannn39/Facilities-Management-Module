@@ -5,15 +5,20 @@ import QrScanner from './QrScanner';
 /**
  * MyBookings — the "My Bookings" page (reference screen 6).
  *
- * Status badge mapping from backend → display label:
- *   Pending            → "Pending Approval" (amber)
- *   Confirmed          → "Confirmed" (blue) + Scan QR button if upcoming
- *   Checked_In         → "Completed" once start_time has passed (green-grey),
- *                         otherwise still shown as Confirmed-with-QR-button
- *                         (a user who already checked in early shouldn't see
- *                         the scan button again)
- *   Rejected           → "Rejected" (red)
- *   Cancelled_No_Show   → "Cancelled" (red) + auto-cancellation note
+ * GET /bookings now returns BookingRequest rows (not Booking rows) — under
+ * the ERD's two-table design, a Pending or Rejected request never gets a
+ * Booking row at all, so querying from BookingRequest is the only way to
+ * show those states here. Each request optionally carries a nested
+ * `booking` object (present once approved/instant-confirmed) which itself
+ * optionally carries a nested `check_in` (present once scanned).
+ *
+ * Status comes from combining two levels:
+ *   request.status === 'Pending'   → "Pending Approval" (amber)
+ *   request.status === 'Rejected'  → "Rejected" (red)
+ *   request.status === 'Approved' and...
+ *     request.booking.status === 'Confirmed'         → "Confirmed" (blue) + Scan QR button
+ *     request.booking.status === 'Checked_In'        → "Completed" (grey)
+ *     request.booking.status === 'Cancelled_No_Show' → "Cancelled" (red) + auto-cancellation note
  *
  * Only one QrScanner is ever mounted at a time (inside a small modal,
  * opened per-booking) since the scanner library binds to a single
@@ -21,39 +26,39 @@ import QrScanner from './QrScanner';
  * would collide.
  */
 export default function MyBookings() {
-  const [bookings, setBookings] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [scanningBookingId, setScanningBookingId] = useState(null);
 
-  const loadBookings = () => {
+  const loadRequests = () => {
     setLoading(true);
     api.get('/bookings')
-      .then(res => setBookings(res.data.data || []))
+      .then(res => setRequests(res.data.data || []))
       .catch(() => setError('Could not load your bookings.'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadBookings(); }, []);
+  useEffect(() => { loadRequests(); }, []);
 
   if (loading) return <p style={styles.hint}>Loading your bookings…</p>;
   if (error) return <p style={{ ...styles.hint, color: '#c00' }}>{error}</p>;
-  if (bookings.length === 0) {
+  if (requests.length === 0) {
     return <p style={styles.hint}>You haven't made any bookings yet. Browse Facilities to get started.</p>;
   }
 
   return (
     <div>
       <div style={styles.list}>
-        {bookings.map((booking) => {
-          const info = describeBooking(booking);
+        {requests.map((req) => {
+          const info = describeRequest(req);
 
           return (
-            <div key={booking.id} style={styles.card}>
+            <div key={req.request_id} style={styles.card}>
               <div style={styles.cardLeft}>
-                <div style={styles.facilityName}>{booking.facility?.name || 'Facility'}</div>
+                <div style={styles.facilityName}>{req.facility?.name || 'Facility'}</div>
                 <div style={styles.timeRow}>
-                  🕐 {formatDate(booking.start_time)} · {formatTime(booking.start_time)} - {formatTime(booking.end_time)}
+                  🕐 {formatDate(req.start_time)} · {formatTime(req.start_time)} - {formatTime(req.end_time)}
                 </div>
                 {info.note && (
                   <div style={{ ...styles.note, color: info.noteColor }}>{info.note}</div>
@@ -65,7 +70,7 @@ export default function MyBookings() {
                   {info.label}
                 </span>
                 {info.showScanButton && (
-                  <button style={styles.scanBtn} onClick={() => setScanningBookingId(booking.id)}>
+                  <button style={styles.scanBtn} onClick={() => setScanningBookingId(req.booking.booking_id)}>
                     📱 Scan QR to Check In
                   </button>
                 )}
@@ -82,7 +87,7 @@ export default function MyBookings() {
             <QrScanner bookingId={scanningBookingId} />
             <button
               style={styles.doneBtn}
-              onClick={() => { setScanningBookingId(null); loadBookings(); }}
+              onClick={() => { setScanningBookingId(null); loadRequests(); }}
             >
               Done
             </button>
@@ -93,12 +98,32 @@ export default function MyBookings() {
   );
 }
 
-/** Maps a raw booking record to its display label, colors, and note text. */
-function describeBooking(booking) {
-  switch (booking.status) {
-    case 'Pending':
-      return { label: 'Pending Approval', badgeBg: '#fff7e6', badgeColor: '#946200' };
+/** Maps a raw BookingRequest (with nested booking) to its display label, colors, and note text. */
+function describeRequest(req) {
+  if (req.status === 'Pending') {
+    return { label: 'Pending Approval', badgeBg: '#fff7e6', badgeColor: '#946200' };
+  }
 
+  if (req.status === 'Rejected') {
+    return {
+      label: 'Rejected',
+      badgeBg: '#fff0f1',
+      badgeColor: '#bd2130',
+      note: 'Your booking request was declined by the facility manager.',
+      noteColor: '#bd2130',
+    };
+  }
+
+  // status === 'Approved' from here on — look at the nested booking to
+  // tell Confirmed / Completed / Cancelled apart.
+  const booking = req.booking;
+  if (!booking) {
+    // Defensive fallback: shouldn't happen (Approved should always carry a
+    // booking), but avoids a blank/crashed card if it ever does.
+    return { label: 'Approved', badgeBg: '#eaf2ff', badgeColor: '#0d4cd3' };
+  }
+
+  switch (booking.status) {
     case 'Confirmed':
       return {
         label: 'Confirmed',
@@ -111,15 +136,6 @@ function describeBooking(booking) {
 
     case 'Checked_In':
       return { label: 'Completed', badgeBg: '#f1f1f1', badgeColor: '#555' };
-
-    case 'Rejected':
-      return {
-        label: 'Rejected',
-        badgeBg: '#fff0f1',
-        badgeColor: '#bd2130',
-        note: 'Your booking request was declined by the facility manager.',
-        noteColor: '#bd2130',
-      };
 
     case 'Cancelled_No_Show':
       return {
@@ -137,18 +153,11 @@ function describeBooking(booking) {
 
 /**
  * Formats a backend datetime string for display WITHOUT going through any
- * timezone conversion.
- *
- * Why not `new Date(dt)`: the backend stores/serializes timestamps as UTC
- * (Laravel's default app timezone), so a booking saved as "10:00" comes
- * back from the API as "...T10:00:00.000000Z". `new Date()` reads that
- * trailing Z as "this really is 10:00 UTC" and converts it to the
- * browser's local timezone when displayed — for a browser in UTC+8 that
- * silently turns a 10:00 booking into an 18:00 display. Since "10:00"
- * here always means the facility's own local opening hours (there's no
- * cross-timezone travel concept in this app), the fix is to read the
- * digits straight out of the string and skip Date's timezone math
- * entirely — what was typed is what's shown, full stop.
+ * timezone conversion. See CHANGES_TIMEZONE_FIX.md for the full
+ * explanation — short version: the backend serializes as UTC ("Z"
+ * suffix), and `new Date()` would silently shift displayed times by the
+ * browser's timezone offset. Reading the digits straight out of the
+ * string avoids that entirely.
  */
 function formatDate(dt) {
   return dt.slice(0, 10); // "2026-05-07T10:00:00.000000Z" → "2026-05-07"

@@ -7,24 +7,28 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * Facility — ERD fields: facility_id (PK), tenant_id (FK), name,
+     * category, status, image_url, created_at.
+     *
+     * `approval_tier` previously lived on this table too (a holdover from
+     * before OperationalRule existed) — the ERD only has it on
+     * OperationalRule, so it's removed here to avoid two tables disagreeing
+     * about which one is authoritative. SchedulingService now reads
+     * approval_tier from facility->operationalRule->approval_tier instead.
      */
     public function up(): void
     {
         Schema::create('facilities', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
+            $table->id('facility_id');
+            $table->foreignId('tenant_id')->constrained('tenants', 'tenant_id')->onDelete('cascade');
             $table->string('name'); // e.g., "Gym", "BBQ Pit", "Function Hall"
-            $table->text('description')->nullable();
-            // 0 = instant booking, >0 = requires manager approval (FR1 vs FR3)
-            $table->integer('approval_tier')->default(0);
-            $table->timestamps();
+            $table->string('category')->nullable(); // e.g., "Sports", "Recreation", "Event Space"
+            $table->string('status')->default('active'); // 'active' | 'inactive' | 'maintenance'
+            $table->string('image_url')->nullable();
+            $table->timestamp('created_at')->useCurrent();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('facilities');

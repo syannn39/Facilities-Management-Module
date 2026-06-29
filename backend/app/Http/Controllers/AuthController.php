@@ -73,8 +73,8 @@ class AuthController extends Controller
             'role'      => $user->role,       // 'Resident' or 'Manager'
             'tenant_id' => $user->tenant_id,
             'tenant'    => $user->tenant ? [
-                'id'   => $user->tenant->id,
-                'name' => $user->tenant->name,
+                'id'   => $user->tenant->tenant_id,
+                'name' => $user->tenant->tenant_name,
                 'type' => $user->tenant->type, // 'residential' | 'school'
             ] : null,
         ];

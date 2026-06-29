@@ -21,7 +21,7 @@ import Calendar from './Calendar';
  * told the user).
  */
 export default function BookingModal({ facility, onClose, onBooked }) {
-  const requiresApproval = facility.approval_tier > 0;
+  const requiresApproval = (facility.operational_rule?.approval_tier ?? 0) > 0;
   const todayKey = new Date().toISOString().slice(0, 10);
 
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
@@ -40,11 +40,11 @@ export default function BookingModal({ facility, onClose, onBooked }) {
     setSlotsError('');
     setSelectedSlot(null);
 
-    api.get(`/facilities/${facility.id}/availability`, { params: { date: selectedDate } })
+    api.get(`/facilities/${facility.facility_id}/availability`, { params: { date: selectedDate } })
       .then(res => setSlots(res.data.data || []))
       .catch(() => setSlotsError('Could not load time slots.'))
       .finally(() => setSlotsLoading(false));
-  }, [facility.id, selectedDate]);
+  }, [facility.facility_id, selectedDate]);
 
   const canProceed = selectedSlot && (!requiresApproval || (purpose.trim() && guestCount > 0));
 
@@ -54,7 +54,7 @@ export default function BookingModal({ facility, onClose, onBooked }) {
 
     try {
       await api.post('/bookings', {
-        facility_id: facility.id,
+        facility_id: facility.facility_id,
         start_time: `${selectedDate} ${selectedSlot.start}:00`,
         end_time: `${selectedDate} ${selectedSlot.end}:00`,
         purpose_of_use: requiresApproval ? purpose : null,

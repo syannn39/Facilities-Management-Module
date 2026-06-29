@@ -7,25 +7,29 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Run the migrations.
+     * User — ERD fields: user_id (PK, already `id` from Laravel's base
+     * users migration), tenant_id (FK), name, role, email, password_hash
+     * (Laravel's `password` column — kept as `password` rather than
+     * renamed, since Auth/Sanctum/the 'hashed' cast all key off that exact
+     * column name; renaming it would break authentication, not just
+     * cosmetics), phone_number, created_at (already present from the base
+     * migration).
      */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            // This foreign key ensures every user is bound to a single specific tenant property
-            $table->foreignId('tenant_id')->nullable()->constrained()->onDelete('cascade');
-            $table->string('role')->default('Resident'); // Can be 'Resident' or 'Manager'
+            // Every user is bound to exactly one tenant property.
+            $table->foreignId('tenant_id')->nullable()->constrained('tenants', 'tenant_id')->onDelete('cascade');
+            $table->string('role')->default('Resident'); // 'Resident' or 'Manager'
+            $table->string('phone_number')->nullable();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
             $table->dropForeign(['tenant_id']);
-            $table->dropColumn(['tenant_id', 'role']);
+            $table->dropColumn(['tenant_id', 'role', 'phone_number']);
         });
     }
 };

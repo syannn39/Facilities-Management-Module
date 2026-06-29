@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\SchedulingService;
 use App\Services\CheckInService;
-use App\Models\Booking;
+use App\Models\BookingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Exception;
@@ -26,21 +26,28 @@ class BookingController extends Controller
     /**
      * GET /api/bookings  (auth:sanctum)
      *
-     * Powers the "My Bookings" page (Figure 4.1.6). Only the logged-in
-     * user's own bookings — TenantScope already restricts this to their
-     * tenant, and we additionally filter by user_id since a resident
-     * shouldn't see other residents' bookings within the same property.
+     * Powers the "My Bookings" page (Figure 4.1.6). Queries from
+     * BookingRequest rather than Booking, because under the ERD's
+     * two-table design a Pending or Rejected request never gets a Booking
+     * row at all — querying Booking alone would silently hide those from
+     * the user (they'd submit a request requiring approval and then never
+     * see it show up anywhere). Each request here carries its linked
+     * Booking (if one exists yet) via the `booking` relation.
+     *
+     * TenantScope already restricts this to the logged-in user's tenant;
+     * the explicit user_id filter additionally ensures a resident doesn't
+     * see other residents' requests within the same property.
      */
     public function index(Request $request): JsonResponse
     {
-        $bookings = Booking::with('facility')
+        $requests = BookingRequest::with(['facility', 'booking.checkIn'])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('start_time')
             ->get();
 
         return response()->json([
             'success' => true,
-            'data'    => $bookings,
+            'data'    => $requests,
         ]);
     }
 
@@ -61,19 +68,27 @@ class BookingController extends Controller
         try {
             // Retrieve authenticated user context ID safely from token lookup
             $userId = $request->user()->id;
-            
-            // Invoke Algorithm 1 & 2 via our service layer
-            $booking = $this->schedulingService->validateAndCreateBooking($validated, $userId);
-            $booking->load('facility');
 
-            $message = ($booking->status === 'Pending') 
+            // Invoke Algorithm 1 & 2 via our service layer. Under the ERD's
+            // two-table design this always produces a BookingRequest, and
+            // a Booking too IF the facility allows instant booking.
+            $result = $this->schedulingService->validateAndCreateBooking($validated, $userId);
+            $bookingRequest = $result['request'];
+            $booking = $result['booking'];
+
+            $isPending = $booking === null;
+
+            $message = $isPending
                 ? 'Your booking requires manager approval. You will be notified once reviewed.'
                 : 'Facility booking submitted successfully!';
 
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'data'    => $booking
+                'data'    => [
+                    'request' => $bookingRequest,
+                    'booking' => $booking, // null while Pending — nothing to check in to yet
+                ],
             ], 201);
 
         } catch (Exception $e) {
@@ -95,7 +110,7 @@ class BookingController extends Controller
 
         try {
             // Invoke Algorithm 3 via our check-in service layer
-            $checkIn = $this->checkInService->processQrCheckIn($id, $request->qr_data);
+            $checkIn = $this->checkInService->processQrCheckIn($id, $request->qr_data, $request->user()->id);
             
             return response()->json([
                 'success' => true,

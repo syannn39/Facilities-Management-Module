@@ -51,7 +51,7 @@ export default function FacilityList({ onBookingCreated }) {
 
       <div style={styles.grid}>
         {facilities.map((facility) => {
-          const requiresApproval = (facility.operational_rule?.approval_tier ?? 0) > 0;
+          const requiresApproval = (facility.get_operational_rule?.approval_tier ?? 0) > 0;
 
           return (
             <div key={facility.facility_id} style={styles.card}>
@@ -64,14 +64,14 @@ export default function FacilityList({ onBookingCreated }) {
               </div>
 
               <div style={styles.cardMeta}>
-                {facility.operational_rule?.max_capacity && (
+                {facility.get_operational_rule?.max_capacity && (
                   <span style={styles.metaLine}>
-                    👥 Capacity: {facility.operational_rule.max_capacity} people
+                    👥 Capacity: {facility.get_operational_rule.max_capacity} people
                   </span>
                 )}
-                {facility.operational_rule?.opening_time && facility.operational_rule?.closing_time && (
+                {facility.get_operational_rule?.opening_time && facility.get_operational_rule?.closing_time && (
                   <span style={styles.metaLine}>
-                    🕐 {facility.operational_rule.opening_time.slice(0, 5)} - {facility.operational_rule.closing_time.slice(0, 5)}
+                    🕐 {facility.get_operational_rule.opening_time.slice(0, 5)} - {facility.get_operational_rule.closing_time.slice(0, 5)}
                   </span>
                 )}
                 {requiresApproval && <span style={styles.requiresApproval}>Requires Approval</span>}

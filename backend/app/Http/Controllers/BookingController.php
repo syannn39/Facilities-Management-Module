@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Services\SchedulingService;
-use App\Services\CheckInService;
 use App\Models\BookingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -12,15 +11,13 @@ use Exception;
 class BookingController extends Controller
 {
     protected SchedulingService $schedulingService;
-    protected CheckInService $checkInService;
 
     /**
      * Dependency Injection: Bind our business engines natively into the controller.
      */
-    public function __construct(SchedulingService $schedulingService, CheckInService $checkInService)
+    public function __construct(SchedulingService $schedulingService)
     {
         $this->schedulingService = $schedulingService;
-        $this->checkInService = $checkInService;
     }
 
     /**
@@ -40,7 +37,7 @@ class BookingController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $requests = BookingRequest::with(['facility', 'booking.checkIn'])
+        $requests = BookingRequest::with(['facility', 'getBooking.getCheckIn'])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('start_time')
             ->get();
@@ -90,33 +87,6 @@ class BookingController extends Controller
                     'booking' => $booking, // null while Pending — nothing to check in to yet
                 ],
             ], 201);
-
-        } catch (Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
-        }
-    }
-
-    /**
-     * FR5 Handler: Handles entry validation checks from scanned physical QR tokens.
-     */
-    public function checkIn(Request $request, int $id): JsonResponse
-    {
-        $request->validate([
-            'qr_data' => 'required|string'
-        ]);
-
-        try {
-            // Invoke Algorithm 3 via our check-in service layer
-            $checkIn = $this->checkInService->processQrCheckIn($id, $request->qr_data, $request->user()->id);
-            
-            return response()->json([
-                'success' => true,
-                'message' => "Check-in Verified! Welcome to the facility.",
-                'data'    => $checkIn
-            ], 200);
 
         } catch (Exception $e) {
             return response()->json([

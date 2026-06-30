@@ -14,7 +14,7 @@ return new class extends Migration
      * before OperationalRule existed) — the ERD only has it on
      * OperationalRule, so it's removed here to avoid two tables disagreeing
      * about which one is authoritative. SchedulingService now reads
-     * approval_tier from facility->operationalRule->approval_tier instead.
+     * approval_tier from facility->getOperationalRule->approval_tier instead.
      */
     public function up(): void
     {

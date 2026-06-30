@@ -46,17 +46,45 @@ class BookingRequest extends Model
     }
 
     /**
+     * getBooking() per Class Diagram (renamed from booking() — every
+     * caller across BookingController and the frontend's MyBookings.jsx
+     * has been updated to match; see CHANGES_UML_ALIGNMENT.md).
+     *
      * The Booking this request produced once approved/confirmed. Null
      * while status is 'Pending', and stays null forever if 'Rejected'
      * (a rejected request never gets a Booking row).
      */
-    public function booking(): BelongsTo
+    public function getBooking(): BelongsTo
     {
         return $this->belongsTo(Booking::class, 'booking_id', 'booking_id');
     }
 
-    public function notifications(): HasMany
+    public function getNotifications(): HasMany
     {
         return $this->hasMany(Notification::class, 'request_id', 'request_id');
+    }
+
+    /**
+     * getApprovalLogs() per Class Diagram — was entirely missing before
+     * (this relation only made sense once ApprovalLog pointed at
+     * request_id rather than booking_id — see migration note on
+     * approval_logs for why that change was made).
+     */
+    public function getApprovalLogs(): HasMany
+    {
+        return $this->hasMany(ApprovalLog::class, 'request_id', 'request_id');
+    }
+
+    /**
+     * updateStatus() per Class Diagram — validates the target status is
+     * one BookingRequest.status actually supports before writing it.
+     */
+    public function updateStatus(string $status): bool
+    {
+        if (!in_array($status, ['Pending', 'Approved', 'Rejected'], true)) {
+            return false;
+        }
+
+        return $this->update(['status' => $status]);
     }
 }

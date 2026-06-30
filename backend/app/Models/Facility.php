@@ -12,7 +12,7 @@ class Facility extends Model
     use BelongsToTenant; // Enforces Automated Tenant Isolation
 
     protected $primaryKey = 'facility_id';
-    public $timestamps = false; // ERD lists only created_at for this table
+    public $timestamps = false; // Class Diagram lists only created_at for this table
 
     protected $fillable = [
         'name',
@@ -21,30 +21,66 @@ class Facility extends Model
         'image_url',
     ];
 
-    /**
-     * Get the operational rule configuration for this facility.
-     * approval_tier now lives only on OperationalRule (the ERD doesn't
-     * duplicate it here), so checking whether a facility needs approval
-     * means going through this relation: $facility->operationalRule->approval_tier.
-     */
-    public function operationalRule(): HasOne
+    // Relation methods renamed to match the Class Diagram's exact names
+    // (getOperationalRule/getAvailability/getBookingRequests) — every
+    // caller across the codebase (SchedulingService, CheckInService,
+    // OperationalRuleController, frontend JSON keys) has been updated to
+    // match; see CHANGES_UML_ALIGNMENT.md for the full list.
+
+    public function getOperationalRule(): HasOne
     {
         return $this->hasOne(OperationalRule::class, 'facility_id', 'facility_id');
     }
 
     /**
-     * Booking requests made against this facility (the ERD puts
-     * facility_id on BookingRequest, not directly on Booking — to reach
-     * this facility's actual confirmed Bookings, go through
-     * bookingRequests()->bookings() or Booking::whereHas('bookingRequest', ...)).
+     * getAvailability() per Class Diagram — note the diagram names this
+     * singular ("Availability") even though it returns a collection of
+     * Availability rows; kept as a HasMany since one facility can have
+     * many blocked-slot rows.
      */
-    public function bookingRequests(): HasMany
+    public function getAvailability(): HasMany
+    {
+        return $this->hasMany(Availability::class, 'facility_id', 'facility_id');
+    }
+
+    public function getBookingRequests(): HasMany
     {
         return $this->hasMany(BookingRequest::class, 'facility_id', 'facility_id');
     }
 
-    public function availabilities(): HasMany
+    public function bookings(): HasMany
     {
-        return $this->hasMany(Availability::class, 'facility_id', 'facility_id');
+        return $this->hasMany(Booking::class, 'facility_id', 'facility_id');
+    }
+
+    /**
+     * checkActiveBookings() per Class Diagram — true if this facility has
+     * any booking currently in progress or upcoming (Confirmed and not
+     * yet ended). Used, for example, before allowing a manager to set
+     * status to 'maintenance' — you probably don't want to silently
+     * disable a facility someone's mid-use of.
+     */
+    public function checkActiveBookings(): bool
+    {
+        return $this->bookings()
+            ->where('status', 'Confirmed')
+            ->where('end_time', '>', now())
+            ->exists();
+    }
+
+    /**
+     * updateStatus() per Class Diagram — validates the target status is
+     * one of the three the facilities.status column actually supports
+     * before writing it (the migration's column comment lists
+     * 'active'|'inactive'|'maintenance'; this is where that's enforced in
+     * code rather than just left as a comment).
+     */
+    public function updateStatus(string $status): bool
+    {
+        if (!in_array($status, ['active', 'inactive', 'maintenance'], true)) {
+            return false;
+        }
+
+        return $this->update(['status' => $status]);
     }
 }

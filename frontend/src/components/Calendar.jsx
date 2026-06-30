@@ -1,6 +1,27 @@
 import { useState } from 'react';
 
 /**
+ * Builds a "YYYY-MM-DD" key from a Date's LOCAL year/month/day —
+ * deliberately NOT using `date.toISOString()`. toISOString() first
+ * converts the Date to UTC before formatting: a Date built as "29th at
+ * local midnight" in a UTC+8 timezone is actually "28th, 16:00 UTC" once
+ * converted, so toISOString() would silently hand back "28" for a
+ * calendar click on "29" (or for "today" if the current local time is
+ * before UTC midnight rolls over). Reading the local
+ * getFullYear/getMonth/getDate instead avoids any UTC conversion — the
+ * date intended is the date kept.
+ *
+ * Exported so BookingModal.jsx can use the exact same logic for "today"
+ * rather than maintaining a second, easily-out-of-sync copy of this fix.
+ */
+export function toLocalDateKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Minimal month calendar — no external date-picker library, just plain
  * React state, to avoid adding a new npm dependency for one widget.
  * Dates before today are disabled (greyed out, like the reference design).
@@ -30,8 +51,6 @@ export default function Calendar({ selectedDate, onSelectDate }) {
     cells.push({ day: d, inMonth: true, date });
   }
 
-  const toKey = (date) => date.toISOString().slice(0, 10);
-
   const changeMonth = (delta) => {
     setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + delta, 1));
   };
@@ -57,14 +76,14 @@ export default function Calendar({ selectedDate, onSelectDate }) {
           }
 
           const isPast = cell.date < today;
-          const isSelected = selectedDate && toKey(cell.date) === selectedDate;
+          const isSelected = selectedDate && toLocalDateKey(cell.date) === selectedDate;
 
           return (
             <button
               key={i}
               type="button"
               disabled={isPast}
-              onClick={() => onSelectDate(toKey(cell.date))}
+              onClick={() => onSelectDate(toLocalDateKey(cell.date))}
               style={{
                 ...styles.day,
                 ...(isPast ? styles.dayDisabled : {}),

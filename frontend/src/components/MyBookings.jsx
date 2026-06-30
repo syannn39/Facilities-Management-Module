@@ -9,16 +9,18 @@ import QrScanner from './QrScanner';
  * the ERD's two-table design, a Pending or Rejected request never gets a
  * Booking row at all, so querying from BookingRequest is the only way to
  * show those states here. Each request optionally carries a nested
- * `booking` object (present once approved/instant-confirmed) which itself
- * optionally carries a nested `check_in` (present once scanned).
+ * `get_booking` object (BookingRequest::getBooking() per the UML naming —
+ * present once approved/instant-confirmed) which itself optionally
+ * carries a nested `get_check_in` (present once scanned —
+ * Booking::getCheckIn() per the UML Class Diagram naming).
  *
  * Status comes from combining two levels:
  *   request.status === 'Pending'   → "Pending Approval" (amber)
  *   request.status === 'Rejected'  → "Rejected" (red)
  *   request.status === 'Approved' and...
- *     request.booking.status === 'Confirmed'         → "Confirmed" (blue) + Scan QR button
- *     request.booking.status === 'Checked_In'        → "Completed" (grey)
- *     request.booking.status === 'Cancelled_No_Show' → "Cancelled" (red) + auto-cancellation note
+ *     request.get_booking.status === 'Confirmed'         → "Confirmed" (blue) + Scan QR button
+ *     request.get_booking.status === 'Checked_In'        → "Completed" (grey)
+ *     request.get_booking.status === 'Cancelled_No_Show' → "Cancelled" (red) + auto-cancellation note
  *
  * Only one QrScanner is ever mounted at a time (inside a small modal,
  * opened per-booking) since the scanner library binds to a single
@@ -70,7 +72,7 @@ export default function MyBookings() {
                   {info.label}
                 </span>
                 {info.showScanButton && (
-                  <button style={styles.scanBtn} onClick={() => setScanningBookingId(req.booking.booking_id)}>
+                  <button style={styles.scanBtn} onClick={() => setScanningBookingId(req.get_booking.booking_id)}>
                     📱 Scan QR to Check In
                   </button>
                 )}
@@ -116,7 +118,7 @@ function describeRequest(req) {
 
   // status === 'Approved' from here on — look at the nested booking to
   // tell Confirmed / Completed / Cancelled apart.
-  const booking = req.booking;
+  const booking = req.get_booking;
   if (!booking) {
     // Defensive fallback: shouldn't happen (Approved should always carry a
     // booking), but avoids a blank/crashed card if it ever does.

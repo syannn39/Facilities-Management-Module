@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api';
-import Calendar from './Calendar';
+import Calendar, { toLocalDateKey } from './Calendar';
 
 /**
  * BookingModal — covers screens 2, 3, 4, 5 from the reference design.
@@ -21,8 +21,8 @@ import Calendar from './Calendar';
  * told the user).
  */
 export default function BookingModal({ facility, onClose, onBooked }) {
-  const requiresApproval = (facility.operational_rule?.approval_tier ?? 0) > 0;
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const requiresApproval = (facility.get_operational_rule?.approval_tier ?? 0) > 0;
+  const todayKey = toLocalDateKey(new Date());
 
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
   const [selectedDate, setSelectedDate] = useState(todayKey);
@@ -147,7 +147,7 @@ export default function BookingModal({ facility, onClose, onBooked }) {
               <button onClick={onClose} style={styles.secondaryBtn}>Cancel</button>
               <button
                 disabled={!canProceed}
-                onClick={() => setStep('confirm')}
+                onClick={() => { setStep('confirm'); setSubmitError(''); }}
                 style={{ ...styles.primaryBtn, ...(!canProceed ? styles.primaryBtnDisabled : {}) }}
               >
                 {requiresApproval ? 'Submit Request' : 'Book Now'}
@@ -182,7 +182,7 @@ export default function BookingModal({ facility, onClose, onBooked }) {
             {submitError && <p style={{ ...styles.hint, color: '#c00' }}>{submitError}</p>}
 
             <div style={styles.footer}>
-              <button onClick={() => setStep('form')} style={styles.secondaryBtn}>Cancel</button>
+              <button onClick={() => { setStep('form'); setSubmitError(''); }} style={styles.secondaryBtn}>Cancel</button>
               <button
                 disabled={submitting}
                 onClick={handleConfirm}

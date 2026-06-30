@@ -39,4 +39,43 @@ class Schedule extends Model
     {
         return $this->belongsTo(Booking::class, 'booking_id', 'booking_id');
     }
+
+    /**
+     * occupySlot() per Class Diagram — marks this slot as taken. In
+     * practice SchedulingService::confirmBookingFromRequest() already
+     * creates Schedule rows with is_available=false from the start (a
+     * Schedule row only ever exists because a Booking occupies it), so
+     * this exists for the case of re-marking an existing row, not as the
+     * primary way slots get occupied.
+     */
+    public function occupySlot(): bool
+    {
+        return $this->update(['is_available' => false]);
+    }
+
+    /**
+     * releaseSlot() per Class Diagram — frees this slot back up (e.g.
+     * called when the linked Booking is cancelled, so the same time
+     * range can be booked by someone else again).
+     */
+    public function releaseSlot(): bool
+    {
+        return $this->update(['is_available' => true]);
+    }
+
+    /**
+     * checkAvailability() per Class Diagram — true if this specific
+     * Schedule row is currently marked available. Note this checks one
+     * row, not a date range — for "is facility X free at time Y on date
+     * Z" across all bookings for that day, see
+     * SchedulingService::getAvailability() instead, which is the actual
+     * source of truth the booking modal calls (it computes slots
+     * on-the-fly from Booking + Availability rather than relying on
+     * pre-existing Schedule rows, since Schedule rows only exist for
+     * slots that already got booked, not for every theoretically open slot).
+     */
+    public function checkAvailability(): bool
+    {
+        return $this->is_available;
+    }
 }

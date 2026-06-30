@@ -7,28 +7,26 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * ApprovalLog — ERD fields: log_id (PK), booking_id (FK), approver_id
-     * (FK), tier_level, action, remarks, actioned_at.
+     * ApprovalLog — Class Diagram (Figure 4.3.1) fields: log_id (PK),
+     * request_id (FK), approver_id (FK), tier_level, action, remarks,
+     * actioned_at.
      *
-     * Renamed from the previous version's `request_id` to `booking_id` to
-     * match the ERD exactly. Note this is a real semantic change, not just
-     * a rename: the ERD has ApprovalLog pointing at Booking, meaning the
-     * approval decision is logged against the row created once a request
-     * is approved — but a request that's REJECTED never produces a Booking
-     * row at all (see BookingRequest.status='Rejected'). So a rejection
-     * can't be logged here under the ERD's literal design.
+     * CHANGED FROM THE EARLIER ERD: that version had this table pointing
+     * at booking_id instead, which forced booking_id to be nullable since
+     * a Rejected request never produces a Booking row at all — meaning a
+     * rejection's log entry had nothing to point at, and there was no way
+     * to trace "how many times was this facility's request rejected"
+     * directly from this table.
      *
-     * Handled by allowing booking_id to be nullable: an approval (action=
-     * 'Approved') logs the real booking_id once it's created; a rejection
-     * (action='Rejected') logs booking_id=NULL, since there's no Booking
-     * to point at — the request itself (and its rejection reason) lives
-     * entirely in BookingRequest.status / remarks here.
+     * Pointing at request_id instead (every BookingRequest exists at the
+     * moment it's approved OR rejected) fixes that: both actions always
+     * have something to reference, NOT NULL, no workaround needed.
      */
     public function up(): void
     {
         Schema::create('approval_logs', function (Blueprint $table) {
             $table->id('log_id');
-            $table->foreignId('booking_id')->nullable()->constrained('bookings', 'booking_id')->onDelete('cascade');
+            $table->foreignId('request_id')->constrained('booking_requests', 'request_id')->onDelete('cascade');
             $table->foreignId('approver_id')->constrained('users', 'id')->onDelete('cascade');
             $table->integer('tier_level'); // which workflow tier this action satisfied
             $table->string('action'); // 'Approved' | 'Rejected'

@@ -221,6 +221,7 @@ class DatabaseSeeder extends Seeder
 
         $booking = new Booking([
             'request_id'   => $request->request_id,
+            'facility_id'  => $facility->facility_id,
             'user_id'      => $user->id,
             'booking_type' => 'Instant',
             'booking_date' => $start->toDateString(),

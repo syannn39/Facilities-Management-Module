@@ -1,10 +1,3 @@
-Here is the complete, patched version of SY’s `AvailabilityController`.
-
-I kept all of the excellent original logic and comments, but I injected the role-checking security gates and the chronological time validation.
-
-*(Note: I also had to add `Request $request` into the parentheses for the `blockSlot` and `unblockSlot` functions so the system can actually see who is clicking the button!)*
-
-```php
 <?php
 
 namespace App\Http\Controllers;
@@ -153,5 +146,3 @@ class AvailabilityController extends Controller
         ]);
     }
 }
-
-```

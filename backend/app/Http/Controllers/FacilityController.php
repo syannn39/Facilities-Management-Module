@@ -68,6 +68,7 @@ class FacilityController extends Controller
         $validated = $request->validate([
             'name'     => 'required|string',
             'category' => 'nullable|string',
+            'capacity' => 'nullable|integer',
             'status'   => 'nullable|string',
             'image_url' => 'nullable|string',
         ]);
@@ -95,6 +96,8 @@ class FacilityController extends Controller
         $validated = $request->validate([
             'name'      => 'sometimes|string',
             'category'  => 'sometimes|nullable|string',
+            'capacity'  => 'sometimes|nullable|integer',
+            'status'    => 'sometimes|string',
             'image_url' => 'sometimes|nullable|string',
         ]);
 

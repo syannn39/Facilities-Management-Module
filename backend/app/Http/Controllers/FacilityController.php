@@ -66,22 +66,31 @@ class FacilityController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name'     => 'required|string',
-            'category' => 'nullable|string',
+            'name' => 'required|string|max:255',
+            'category' => 'required|string|max:255',
             'capacity' => 'nullable|integer',
-            'status'   => 'nullable|string',
+            'status' => 'required|string',
             'image_url' => 'nullable|string',
+            'workflow_tier_id' => 'nullable|integer',
+            // Accept the booking limit from React
+            'advance_booking_limit' => 'nullable|integer' 
         ]);
 
-        $facility = new Facility($validated);
-        $facility->tenant_id = $request->user()->tenant_id;
-        $facility->save();
+        $facility = Facility::create($request->only([
+            'name', 'category', 'capacity', 'status', 'image_url'
+        ]));
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Facility created successfully.',
-            'data'    => $facility,
-        ], 201);
+        // Automatically generate the Operational Rule for this facility
+        $facility->getOperationalRule()->create([
+            'advance_booking_limit' => $request->advance_booking_limit ?? 30, // Default to 30 days
+            'max_capacity' => $request->capacity ?? 20, // Syncing capacity
+            'approval_tier' => $request->workflow_tier_id ?? 0, // Syncing tier
+            'opening_time' => '08:00:00', // Safe defaults for now
+            'closing_time' => '22:00:00',
+            'grace_period_minutes' => 15,
+        ]);
+
+        return response()->json(['success' => true, 'data' => $facility->load('getOperationalRule')]);
     }
 
     /**
@@ -94,20 +103,33 @@ class FacilityController extends Controller
         $facility = Facility::findOrFail($id);
 
         $validated = $request->validate([
-            'name'      => 'sometimes|string',
-            'category'  => 'sometimes|nullable|string',
-            'capacity'  => 'sometimes|nullable|integer',
-            'status'    => 'sometimes|string',
-            'image_url' => 'sometimes|nullable|string',
+            'name' => 'sometimes|string|max:255',
+            'category' => 'sometimes|string|max:255',
+            'capacity' => 'nullable|integer',
+            'status' => 'sometimes|string',
+            'image_url' => 'nullable|string',
+            'workflow_tier_id' => 'nullable|integer',
+            'advance_booking_limit' => 'nullable|integer'
         ]);
 
-        $facility->update($validated);
+        $facility->update($request->only([
+            'name', 'category', 'capacity', 'status', 'image_url'
+        ]));
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Facility updated successfully.',
-            'data'    => $facility,
-        ]);
+        // Update or Create the Operational Rule
+        $facility->getOperationalRule()->updateOrCreate(
+            ['facility_id' => $facility->facility_id],
+            [
+                'advance_booking_limit' => $request->advance_booking_limit ?? 30, // Default to 30 days
+                'max_capacity' => $request->capacity ?? 20, // Default to 20
+                'approval_tier' => $request->workflow_tier_id ?? 0, // Default to 0
+                'opening_time' => '08:00:00',
+                'closing_time' => '22:00:00',
+                'grace_period_minutes' => 15
+            ]
+        );
+
+        return response()->json(['success' => true, 'data' => $facility->load('getOperationalRule')]);
     }
 
     /**

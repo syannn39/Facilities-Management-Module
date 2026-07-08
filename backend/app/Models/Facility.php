@@ -20,6 +20,7 @@ class Facility extends Model
         'capacity', 
         'status',
         'image_url',
+        'workflow_tier_id'
     ];
 
     // Relation methods renamed to match the Class Diagram's exact names

@@ -4,6 +4,7 @@ import api from '../api';
 
 export default function AdminView() {
   const [facilities, setFacilities] = useState([]);
+  const [workflowTiers, setWorkflowTiers] = useState([]); // NEW: State to hold the tiers
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -11,16 +12,20 @@ export default function AdminView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   
-  // FIXED: Changed 'type' to 'category' to match Supabase
   const [formData, setFormData] = useState({
     name: '',
     category: 'Standard', 
     capacity: '',
-    status: 'active'
+    status: 'active',
+    image_url: '',
+    workflow_tier_id: '', 
+    advance_booking_limit: 30
   });
 
   useEffect(() => {
+    // Fetch BOTH facilities and tiers when the page loads
     fetchFacilities();
+    fetchWorkflowTiers();
   }, []);
 
   const fetchFacilities = async () => {
@@ -36,26 +41,39 @@ export default function AdminView() {
     }
   };
 
+  // NEW: Function to pull the approval tiers for the dropdown
+  const fetchWorkflowTiers = async () => {
+    try {
+      const response = await api.get('/workflow-tiers');
+      setWorkflowTiers(response.data.data || response.data);
+    } catch (err) {
+      console.error("Failed to fetch workflow tiers. Check your API route.", err);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const openModal = (facility = null) => {
+ const openModal = (facility = null) => {
     setActiveDropdown(null);
     if (facility) {
-      // FIXED: Bulletproof ID check
       const rowId = facility.id || facility.facility_id;
       setEditingId(rowId);
       setFormData({
         name: facility.name,
-        category: facility.category || 'Standard', // Match DB column
+        category: facility.category || 'Standard',
         capacity: facility.capacity || '',
-        status: facility.status || 'active'
+        status: facility.status || 'active',
+        image_url: facility.image_url || '',
+        workflow_tier_id: facility.workflow_tier_id || '',
+        // NEW: Check for the exact column name 'advance_booking_limit'
+        advance_booking_limit: facility.get_operational_rule?.advance_booking_limit || 30
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', category: 'Standard', capacity: '', status: 'active' });
+      setFormData({ name: '', category: 'Standard', capacity: '', status: 'active', image_url: '', workflow_tier_id: '', advance_booking_limit: 30 });
     }
     setIsModalOpen(true);
   };
@@ -68,10 +86,16 @@ export default function AdminView() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      // Ensure empty strings are sent as NULL to Laravel for the foreign key
+      const payload = {
+        ...formData,
+        workflow_tier_id: formData.workflow_tier_id === '' ? null : formData.workflow_tier_id
+      };
+
       if (editingId) {
-        await api.put(`/facilities/${editingId}`, formData);
+        await api.put(`/facilities/${editingId}`, payload);
       } else {
-        await api.post('/facilities', formData);
+        await api.post('/facilities', payload);
       }
       closeModal();
       fetchFacilities();
@@ -89,7 +113,7 @@ export default function AdminView() {
         fetchFacilities();
       } catch (err) {
         console.error("Failed to delete:", err);
-        alert("Error deleting facility. Check backend logs.");
+        alert("Error deleting facility.");
       }
     }
   };
@@ -112,6 +136,7 @@ export default function AdminView() {
             <thead>
               <tr style={styles.tableHeadRow}>
                 <th style={styles.th}>Facility Name</th>
+                <th style={styles.th}>Image</th>
                 <th style={styles.th}>Category</th>
                 <th style={styles.th}>Capacity</th>
                 <th style={styles.th}>Advance Booking Limit</th>
@@ -123,32 +148,40 @@ export default function AdminView() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" style={styles.emptyState}>Loading database records...</td>
+                  <td colSpan="8" style={styles.emptyState}>Loading database records...</td>
                 </tr>
               ) : facilities.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={styles.emptyState}>No facilities found.</td>
+                  <td colSpan="8" style={styles.emptyState}>No facilities found.</td>
                 </tr>
               ) : (
                 facilities.map((facility) => {
-                  // FIXED: Extracts the correct ID regardless of how Laravel formats it
                   const rowId = facility.id || facility.facility_id; 
 
                   return (
                     <tr key={rowId} style={styles.tableRow}>
                       <td style={{...styles.td, fontWeight: 'bold'}}>{facility.name}</td>
-                      <td style={{...styles.td, textTransform: 'capitalize'}}>{facility.category || 'Standard'}</td>
-                      <td style={styles.td}>{facility.capacity || 'N/A'}</td>
                       
                       <td style={styles.td}>
-                        {facility.operational_rule?.advance_booking_days 
-                          ? `${facility.operational_rule.advance_booking_days} days` 
+                        {facility.image_url ? (
+                          <img src={facility.image_url} alt="Facility" style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ color: '#aaa', fontSize: '12px' }}>No Image</span>
+                        )}
+                      </td>
+                      
+                      <td style={{...styles.td, textTransform: 'capitalize'}}>{facility.category || 'Standard'}</td>
+                      <td style={styles.td}>{facility.capacity || 'N/A'}</td>
+
+                      <td style={styles.td}>
+                        {facility.get_operational_rule?.advance_booking_limit 
+                          ? `${facility.get_operational_rule.advance_booking_limit} days` 
                           : 'Not set'}
                       </td>
 
                       <td style={styles.td}>
                         <span style={styles.tierBadge}>
-                          {facility.workflow_tier?.name || 'Tier 0'}
+                          {facility.workflow_tier?.name || 'Auto-Approve (Tier 0)'}
                         </span>
                       </td>
 
@@ -201,14 +234,36 @@ export default function AdminView() {
               </div>
 
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Category (e.g., Sports, Recreation)</label>
-                {/* FIXED: Changed name attribute to 'category' */}
+                <label style={styles.label}>Category</label>
                 <input required type="text" name="category" value={formData.category} onChange={handleInputChange} style={styles.input} />
               </div>
 
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Max Capacity</label>
                 <input required type="number" name="capacity" value={formData.capacity} onChange={handleInputChange} style={styles.input} />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Advance Booking Limit (Days)</label>
+                <input required type="number" name="advance_booking_limit" value={formData.advance_booking_limit} onChange={handleInputChange} style={styles.input} />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Image URL</label>
+                <input type="text" name="image_url" value={formData.image_url} onChange={handleInputChange} style={styles.input} placeholder="https://example.com/image.jpg" />
+              </div>
+
+              {/* NEW: Workflow Tier Dropdown */}
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Approval Tier</label>
+                <select name="workflow_tier_id" value={formData.workflow_tier_id} onChange={handleInputChange} style={styles.input}>
+                  <option value="">Auto-Approve (Tier 0)</option>
+                  {workflowTiers.map(tier => (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div style={styles.inputGroup}>
@@ -259,11 +314,11 @@ const styles = {
   dropdownItem: { padding: '10px 16px', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f5f5f5', fontWeight: '600', color: '#333' },
   
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modalContent: { backgroundColor: 'white', padding: '30px', borderRadius: '12px', width: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' },
+  modalContent: { backgroundColor: 'white', padding: '30px', borderRadius: '12px', width: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' },
   form: { display: 'flex', flexDirection: 'column', gap: '16px' },
   inputGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
   label: { fontSize: '13px', fontWeight: 'bold', color: '#555' },
-  input: { padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px' },
+  input: { padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px', backgroundColor: '#fff' },
   modalActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' },
   cancelButton: { padding: '10px 16px', backgroundColor: '#f5f5f5', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#555' },
   saveButton: { padding: '10px 16px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }

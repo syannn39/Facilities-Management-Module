@@ -1,3 +1,10 @@
+Here is the complete, patched version of SY’s `AvailabilityController`.
+
+I kept all of the excellent original logic and comments, but I injected the role-checking security gates and the chronological time validation.
+
+*(Note: I also had to add `Request $request` into the parentheses for the `blockSlot` and `unblockSlot` functions so the system can actually see who is clicking the button!)*
+
+```php
 <?php
 
 namespace App\Http\Controllers;
@@ -41,11 +48,20 @@ class AvailabilityController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Security Gate: Check if user is Manager or Admin
+        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only management can modify availability.'
+            ], 403);
+        }
+
+        // Chronological Time Validation added
         $validated = $request->validate([
             'facility_id' => 'required|integer',
             'date'        => 'required|date_format:Y-m-d',
-            'start_time'  => 'required',
-            'end_time'    => 'required',
+            'start_time'  => 'required|date_format:H:i',
+            'end_time'    => 'required|date_format:H:i|after:start_time',
             'is_blocked'  => 'boolean',
         ]);
 
@@ -63,12 +79,19 @@ class AvailabilityController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only management can modify availability.'
+            ], 403);
+        }
+
         $availability = Availability::findOrFail($id);
 
         $validated = $request->validate([
             'date'       => 'sometimes|date_format:Y-m-d',
-            'start_time' => 'sometimes',
-            'end_time'   => 'sometimes',
+            'start_time' => 'sometimes|date_format:H:i',
+            'end_time'   => 'sometimes|date_format:H:i|after:start_time',
             'is_blocked' => 'sometimes|boolean',
         ]);
 
@@ -87,8 +110,15 @@ class AvailabilityController extends Controller
      * blockSlot() per Class Diagram — convenience shortcut over update()
      * for the common case of just flipping is_blocked on.
      */
-    public function blockSlot(int $id): JsonResponse
+    public function blockSlot(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only management can modify availability.'
+            ], 403);
+        }
+
         $availability = Availability::findOrFail($id);
         $availability->update(['is_blocked' => true]);
 
@@ -104,8 +134,15 @@ class AvailabilityController extends Controller
      *
      * unblockSlot() per Class Diagram.
      */
-    public function unblockSlot(int $id): JsonResponse
+    public function unblockSlot(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized. Only management can modify availability.'
+            ], 403);
+        }
+
         $availability = Availability::findOrFail($id);
         $availability->update(['is_blocked' => false]);
 
@@ -116,3 +153,5 @@ class AvailabilityController extends Controller
         ]);
     }
 }
+
+```

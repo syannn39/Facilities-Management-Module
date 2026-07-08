@@ -64,7 +64,7 @@ export default function AdminView() {
       setFormData({
         name: facility.name,
         category: facility.category || 'Standard',
-        capacity: facility.capacity || '',
+        capacity: facility.get_operational_rule?.max_capacity || '',
         status: facility.status || 'active',
         image_url: facility.image_url || '',
         workflow_tier_id: facility.workflow_tier_id || '',
@@ -171,7 +171,7 @@ export default function AdminView() {
                       </td>
                       
                       <td style={{...styles.td, textTransform: 'capitalize'}}>{facility.category || 'Standard'}</td>
-                      <td style={styles.td}>{facility.capacity || 'N/A'}</td>
+                      <td style={styles.td}>{facility.get_operational_rule?.max_capacity || 'N/A'}</td>
 
                       <td style={styles.td}>
                         {facility.get_operational_rule?.advance_booking_limit 

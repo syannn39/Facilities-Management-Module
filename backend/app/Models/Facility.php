@@ -17,7 +17,6 @@ class Facility extends Model
     protected $fillable = [
         'name',
         'category',
-        'capacity', 
         'status',
         'image_url',
         'workflow_tier_id'

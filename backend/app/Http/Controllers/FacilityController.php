@@ -68,7 +68,6 @@ class FacilityController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'category' => 'required|string|max:255',
-            'capacity' => 'nullable|integer',
             'status' => 'required|string',
             'image_url' => 'nullable|string',
             'workflow_tier_id' => 'nullable|integer',
@@ -77,7 +76,7 @@ class FacilityController extends Controller
         ]);
 
         $facility = Facility::create($request->only([
-            'name', 'category', 'capacity', 'status', 'image_url'
+            'name', 'category', 'status', 'image_url'
         ]));
 
         // Automatically generate the Operational Rule for this facility
@@ -105,7 +104,6 @@ class FacilityController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|string|max:255',
             'category' => 'sometimes|string|max:255',
-            'capacity' => 'nullable|integer',
             'status' => 'sometimes|string',
             'image_url' => 'nullable|string',
             'workflow_tier_id' => 'nullable|integer',
@@ -113,7 +111,7 @@ class FacilityController extends Controller
         ]);
 
         $facility->update($request->only([
-            'name', 'category', 'capacity', 'status', 'image_url'
+            'name', 'category', 'status', 'image_url'
         ]));
 
         // Update or Create the Operational Rule

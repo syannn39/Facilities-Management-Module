@@ -30,14 +30,16 @@ class FacilityController extends Controller
      */
     public function index(): JsonResponse
     {
+        // eager-load the rules, AND count the related bookings/requests
         $facilities = Facility::with('getOperationalRule')
-            ->orderBy('name')
+            ->withCount('bookings') // Creates a 'bookings_count' attribute
+            ->withCount(['getBookingRequests as pending_requests_count' => function ($query) {
+                // Filters the count to ONLY show pending requests
+                $query->where('status', 'Pending'); 
+            }])
             ->get();
 
-        return response()->json([
-            'success' => true,
-            'data'    => $facilities,
-        ]);
+        return response()->json(['success' => true, 'data' => $facilities]);
     }
 
     /**

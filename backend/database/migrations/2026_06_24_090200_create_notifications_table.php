@@ -23,7 +23,7 @@ return new class extends Migration
         Schema::create('notifications', function (Blueprint $table) {
             $table->id('notification_id');
             $table->foreignId('tenant_id')->constrained('tenants', 'tenant_id')->onDelete('cascade');
-            $table->foreignId('user_id')->constrained('users', 'id')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->foreignId('request_id')->nullable()->constrained('booking_requests', 'request_id')->onDelete('cascade');
             $table->string('type'); // 'Booking_Confirmed' | 'Request_Pending' | 'Request_Approved' | 'Request_Rejected' | 'No_Show'
             $table->string('subject');

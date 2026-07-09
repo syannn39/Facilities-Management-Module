@@ -7,20 +7,16 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Booking — Class Diagram (Figure 4.3.1) fields: booking_id (PK),
-     * request_id (FK), tenant_id (FK), facility_id (FK), user_id (FK),
-     * booking_date, start_time, end_time, booking_type, status, created_at.
+     * Booking — ERD fields: booking_id (PK), request_id (FK), tenant_id
+     * (FK), user_id (FK), booking_type, booking_date, start_time,
+     * end_time, status, created_at. Matches the ERD exactly.
      *
-     * CHANGED FROM THE EARLIER ERD: that version left facility_id only on
-     * BookingRequest, reachable from Booking only via a hasOneThrough
-     * indirection. The Class Diagram puts facility_id directly on Booking
-     * too — kept here as a direct, fast-lookup column (still also on
-     * BookingRequest, since that's where Algorithm 2's conflict detection
-     * needs it before any Booking exists yet).
-     *
-     * purpose_of_use and guest_count stay on BookingRequest only (still
-     * not in either diagram, but needed for FR3's "Extended Detail Form" —
-     * see booking_requests migration note).
+     * NOTE: facility_id was removed to strictly match the ERD (the ERD
+     * only puts facility_id on BookingRequest, not on Booking). Any code
+     * that previously read booking->facility_id directly will need to go
+     * through booking->request->facility_id instead — check
+     * SchedulingService and anywhere else that queried Booking by
+     * facility_id.
      *
      * booking_type values: 'Instant' | 'Request' — set from which path
      * Algorithm 1 took (approval_tier == 0 vs > 0).
@@ -34,8 +30,7 @@ return new class extends Migration
             $table->id('booking_id');
             $table->foreignId('request_id')->constrained('booking_requests', 'request_id')->onDelete('cascade');
             $table->foreignId('tenant_id')->constrained('tenants', 'tenant_id')->onDelete('cascade');
-            $table->foreignId('facility_id')->constrained('facilities', 'facility_id')->onDelete('cascade');
-            $table->foreignId('user_id')->constrained('users', 'id')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->string('booking_type'); // 'Instant' | 'Request'
             $table->date('booking_date');
             $table->dateTime('start_time');
@@ -44,7 +39,6 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
 
             $table->index(['user_id', 'status'], 'bookings_user_status_idx');
-            $table->index(['facility_id', 'status'], 'bookings_facility_status_idx');
         });
 
         // Now that bookings exists, backfill the other half of the

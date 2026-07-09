@@ -22,7 +22,6 @@ return new class extends Migration
             $table->foreignId('rule_id')->constrained('operational_rules', 'rule_id')->onDelete('cascade');
             $table->integer('tier_level'); // 1: first tier, 2: second tier, etc.
             $table->string('assigned_role'); // e.g., 'Manager', 'Admin'
-            $table->timestamps();
         });
     }
 

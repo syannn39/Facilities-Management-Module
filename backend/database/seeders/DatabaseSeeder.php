@@ -63,6 +63,10 @@ class DatabaseSeeder extends Seeder
      * Creates one Tenant, its two test accounts (resident-equivalent +
      * manager), and its facility catalog with matching OperationalRule rows.
      *
+     * NOTE: $tenantType is still accepted as a param (used only to label the
+     * seeded test users, e.g. "Test residential User") but is no longer
+     * persisted onto the tenants table, since `type` isn't in the ERD.
+     *
      * @return array<string, Facility> facilities keyed by name, for seedSampleBookings()
      */
     private function createTenantWithFacilities(
@@ -78,25 +82,24 @@ class DatabaseSeeder extends Seeder
             'tenant_name'   => $tenantName,
             'contact_email' => $contactEmail,
             'address'       => $address,
-            'type'          => $tenantType,
         ]);
 
         User::create([
-            'name'      => "Test {$tenantType} User",
-            'email'     => $residentEmail,
-            'password'  => 'password',   // auto-hashed by the 'hashed' cast
-            'tenant_id' => $tenant->tenant_id,
-            'role'      => 'Resident',
-            'phone_number' => '+60123456789',
+            'name'          => "Test {$tenantType} User",
+            'email'         => $residentEmail,
+            'password_hash' => 'password',   // auto-hashed by the 'hashed' cast
+            'tenant_id'     => $tenant->tenant_id,
+            'role'          => 'Resident',
+            'phone_number'  => '+60123456789',
         ]);
 
         User::create([
-            'name'      => "Test {$tenantType} Manager",
-            'email'     => $managerEmail,
-            'password'  => 'password',
-            'tenant_id' => $tenant->tenant_id,
-            'role'      => 'Manager',
-            'phone_number' => '+60198765432',
+            'name'          => "Test {$tenantType} Manager",
+            'email'         => $managerEmail,
+            'password_hash' => 'password',
+            'tenant_id'     => $tenant->tenant_id,
+            'role'          => 'Manager',
+            'phone_number'  => '+60198765432',
         ]);
 
         $createdFacilities = [];
@@ -117,7 +120,6 @@ class DatabaseSeeder extends Seeder
                 'opening_time'           => $def['open'],
                 'closing_time'           => $def['close'],
                 'advance_booking_limit'  => 30,
-                'grace_period_minutes'   => 15, // not in ERD — see migration note
             ]);
 
             $createdFacilities[$def['name']] = $facility;
@@ -164,28 +166,24 @@ class DatabaseSeeder extends Seeder
 
         // ── Pending — awaiting manager approval (approval_tier > 0 facility) ─
         BookingRequest::create([
-            'tenant_id'      => $user->tenant_id,
-            'facility_id'    => $facilities['BBQ Pit']->facility_id,
-            'user_id'        => $user->id,
-            'booking_date'   => Carbon::now()->addDays(3)->toDateString(),
-            'start_time'     => Carbon::now()->addDays(3)->setTime(18, 0),
-            'end_time'       => Carbon::now()->addDays(3)->setTime(22, 0),
-            'status'         => 'Pending',
-            'purpose_of_use' => 'Family birthday gathering',
-            'guest_count'    => 15,
+            'tenant_id'    => $user->tenant_id,
+            'facility_id'  => $facilities['BBQ Pit']->facility_id,
+            'user_id'      => $user->user_id,
+            'booking_date' => Carbon::now()->addDays(3)->toDateString(),
+            'start_time'   => Carbon::now()->addDays(3)->setTime(18, 0),
+            'end_time'     => Carbon::now()->addDays(3)->setTime(22, 0),
+            'status'       => 'Pending',
         ]);
 
         // ── Rejected — manager declined the request ──────────────────────────
         BookingRequest::create([
-            'tenant_id'      => $user->tenant_id,
-            'facility_id'    => $facilities['Multi-Purpose Hall']->facility_id,
-            'user_id'        => $user->id,
-            'booking_date'   => Carbon::now()->subDays(2)->toDateString(),
-            'start_time'     => Carbon::now()->subDays(2)->setTime(19, 0),
-            'end_time'       => Carbon::now()->subDays(2)->setTime(23, 0),
-            'status'         => 'Rejected',
-            'purpose_of_use' => 'Private function',
-            'guest_count'    => 80,
+            'tenant_id'    => $user->tenant_id,
+            'facility_id'  => $facilities['Multi-Purpose Hall']->facility_id,
+            'user_id'      => $user->user_id,
+            'booking_date' => Carbon::now()->subDays(2)->toDateString(),
+            'start_time'   => Carbon::now()->subDays(2)->setTime(19, 0),
+            'end_time'     => Carbon::now()->subDays(2)->setTime(23, 0),
+            'status'       => 'Rejected',
         ]);
     }
 
@@ -207,22 +205,22 @@ class DatabaseSeeder extends Seeder
     ): void {
         $request = new BookingRequest([
             'facility_id'  => $facility->facility_id,
-            'user_id'      => $user->id,
+            'user_id'      => $user->user_id,
             'booking_date' => $start->toDateString(),
             'start_time'   => $start,
             'end_time'     => $end,
             'status'       => 'Approved',
-            'guest_count'  => 0,
         ]);
         $request->tenant_id = $user->tenant_id;
         $request->save();
 
         $bookingStatus = $noShow ? 'Cancelled_No_Show' : ($checkedIn ? 'Checked_In' : 'Confirmed');
 
+        // NOTE: Booking no longer stores facility_id directly (removed to
+        // match the ERD) — it's reached via $booking->request->facility_id.
         $booking = new Booking([
             'request_id'   => $request->request_id,
-            'facility_id'  => $facility->facility_id,
-            'user_id'      => $user->id,
+            'user_id'      => $user->user_id,
             'booking_type' => 'Instant',
             'booking_date' => $start->toDateString(),
             'start_time'   => $start,
@@ -247,7 +245,7 @@ class DatabaseSeeder extends Seeder
         if ($checkedIn) {
             CheckIn::create([
                 'booking_id'   => $booking->booking_id,
-                'user_id'      => $user->id,
+                'user_id'      => $user->user_id,
                 'checkin_time' => $start->copy()->addMinutes(5),
                 'method'       => 'QR',
                 'status'       => 'Success',

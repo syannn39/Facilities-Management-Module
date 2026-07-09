@@ -25,7 +25,7 @@ return new class extends Migration
             $table->id('checkin_id');
             // One booking can only ever be successfully checked into once.
             $table->foreignId('booking_id')->unique()->constrained('bookings', 'booking_id')->onDelete('cascade');
-            $table->foreignId('user_id')->constrained('users', 'id')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->dateTime('checkin_time');
             $table->string('method')->default('QR'); // 'QR' | 'Manual'
             $table->string('status')->default('Success'); // 'Success' | 'Invalid_Location' | 'Outside_Window'

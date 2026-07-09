@@ -23,7 +23,6 @@ return new class extends Migration
             $table->foreignId('tenant_id')->constrained('tenants', 'tenant_id')->onDelete('cascade');
             $table->string('name'); // e.g., "Gym", "BBQ Pit", "Function Hall"
             $table->string('category')->nullable(); // e.g., "Sports", "Recreation", "Event Space"
-            $table->integer('capacity')->nullable();
             $table->string('status')->default('active'); // 'active' | 'inactive' | 'maintenance'
             $table->string('image_url')->nullable();
             $table->timestamp('created_at')->useCurrent();

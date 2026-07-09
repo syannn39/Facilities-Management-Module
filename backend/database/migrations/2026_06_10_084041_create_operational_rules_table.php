@@ -9,15 +9,16 @@ return new class extends Migration
     /**
      * OperationalRule — ERD fields: rule_id (PK), facility_id (FK),
      * max_capacity, opening_time, closing_time, advance_booking_limit,
-     * approval_tier, updated_at (the ERD lists only updated_at here, not
-     * created_at — kept that way to match).
+     * approval_tier, updated_at. Matches the ERD exactly.
      *
      * No tenant_id on this table — the ERD scopes OperationalRule through
      * facility_id → Facility → tenant_id rather than duplicating tenant_id
-     * directly on every table. (An earlier version of this migration did
-     * add tenant_id directly here as a quick fix for a TenantScope crash;
-     * this rewrite removes it again to match the ERD, and the model's
-     * tenant scoping is adjusted accordingly — see OperationalRule.php.)
+     * directly on every table.
+     *
+     * NOTE: grace_period_minutes was removed to strictly match the ERD.
+     * That field was backing FR5 / Algorithm 3's check-in grace window —
+     * if that feature is still needed, add the field back to the ERD
+     * itself, or find another home for it in your app logic.
      */
     public function up(): void
     {
@@ -30,16 +31,6 @@ return new class extends Migration
             // How many days in advance a booking may be made (e.g. 30 = can't book more than 30 days out)
             $table->integer('advance_booking_limit')->default(30);
             $table->integer('approval_tier')->default(0); // 0: no approval, >0: requires approval
-
-            // NOT in the ERD — flagging this for you and your teammate.
-            // FR5 / Algorithm 3 (Check-in Validation) in your report needs a
-            // per-facility check-in grace window (the "15-minute arrival
-            // window"), and nothing in the ERD's CheckIn or OperationalRule
-            // entities has a field to store that number. Kept here so the
-            // feature keeps working; worth adding to the ERD itself so the
-            // diagram and the actual schema agree.
-            $table->integer('grace_period_minutes')->default(15);
-
             $table->timestamp('updated_at')->useCurrent();
         });
     }

@@ -21,11 +21,6 @@ return new class extends Migration
      * status values: 'Pending' | 'Approved' | 'Rejected'
      * (separate from Booking.status, which tracks the post-approval
      * lifecycle: Confirmed → Checked_In / Cancelled_No_Show)
-     *
-     * NOTE: purpose_of_use and guest_count were removed to strictly match
-     * the ERD. Those were backing FR3's "Extended Detail Form" — if that
-     * form is still needed, add the fields back to the ERD, or store them
-     * elsewhere (e.g. a separate table not covered by this diagram).
      */
     public function up(): void
     {
@@ -37,11 +32,13 @@ return new class extends Migration
             $table->foreignId('booking_id')->nullable();
             $table->foreignId('tenant_id')->constrained('tenants', 'tenant_id')->onDelete('cascade');
             $table->foreignId('facility_id')->constrained('facilities', 'facility_id')->onDelete('cascade');
-            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users', 'id')->onDelete('cascade');
             $table->date('booking_date');
             $table->dateTime('start_time');
             $table->dateTime('end_time');
             $table->string('status')->default('Pending'); // Pending | Approved | Rejected
+            $table->text('purpose_of_use')->nullable(); // not in ERD — needed for FR3's "Extended Detail Form"
+            $table->integer('guest_count')->default(0);  // not in ERD — same reason
             $table->timestamp('created_at')->useCurrent();
 
             // Algorithm 2 (conflict detection) filters by facility_id + status + time range

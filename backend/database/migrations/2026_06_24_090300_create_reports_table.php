@@ -19,7 +19,7 @@ return new class extends Migration
         Schema::create('reports', function (Blueprint $table) {
             $table->id('report_id');
             $table->foreignId('tenant_id')->constrained('tenants', 'tenant_id')->onDelete('cascade');
-            $table->foreignId('generated_by')->constrained('users', 'user_id')->onDelete('cascade');
+            $table->foreignId('generated_by')->constrained('users', 'id')->onDelete('cascade');
             $table->string('report_type'); // e.g., 'Booking_History', 'No_Show_Summary', 'Facility_Usage'
             $table->date('date_from');
             $table->date('date_to');

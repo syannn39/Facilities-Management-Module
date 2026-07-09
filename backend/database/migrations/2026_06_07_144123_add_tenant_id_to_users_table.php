@@ -7,14 +7,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * User — ERD fields: user_id (PK), tenant_id (FK), name, role, email,
-     * password_hash, phone_number, created_at.
-     *
-     * IMPORTANT: the base users migration now names the PK `user_id` and
-     * the password column `password_hash` to strictly match the ERD. This
-     * requires corresponding changes in App\Models\User (which wasn't
-     * included in this upload) — see the summary notes for what to update
-     * there (primary key, auth password field, guarded/fillable list).
+     * User — ERD fields: user_id (PK, already `id` from Laravel's base
+     * users migration), tenant_id (FK), name, role, email, password_hash
+     * (Laravel's `password` column — kept as `password` rather than
+     * renamed, since Auth/Sanctum/the 'hashed' cast all key off that exact
+     * column name; renaming it would break authentication, not just
+     * cosmetics), phone_number, created_at (already present from the base
+     * migration).
      */
     public function up(): void
     {

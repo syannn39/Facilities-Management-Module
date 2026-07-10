@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MoreVertical, X } from 'lucide-react'; // Added X icon for the close button
+import { MoreVertical, X, Printer, RefreshCw } from 'lucide-react'; // Added X icon for the close button
+import { QRCodeSVG } from 'qrcode.react'; // npm install qrcode.react
 import api from '../api';
 
 export default function AdminView() {
@@ -15,6 +16,10 @@ export default function AdminView() {
   
   // NEW: State for the Detail View
   const [viewingFacility, setViewingFacility] = useState(null);
+
+  // NEW: State for the QR Code modal
+  const [qrFacility, setQrFacility] = useState(null); // facility currently shown in the QR modal
+  const [qrLoading, setQrLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -118,6 +123,93 @@ export default function AdminView() {
     }
   };
 
+  // NEW: QR code generation / regeneration.
+  // - If the facility has no QR code yet, generate it immediately.
+  // - If it already has one, ask for confirmation before regenerating
+  //   (regenerating invalidates any printed copies of the old code).
+  const requestQrCode = async (facility, confirm = false) => {
+    const rowId = facility.id || facility.facility_id;
+    setQrLoading(true);
+    try {
+      const response = await api.post(`/facilities/${rowId}/qr-code`, confirm ? { confirm: true } : {});
+      const body = response.data;
+
+      if (body.requires_confirmation) {
+        // Backend is telling us a code already exists and wasn't regenerated.
+        // Just show what's already there.
+        setQrFacility({ ...facility, ...body.data });
+        return;
+      }
+
+      const updated = { ...facility, ...body.data };
+      setQrFacility(updated);
+      setFacilities(prev => prev.map(f => (f.id || f.facility_id) === rowId ? { ...f, ...body.data } : f));
+    } catch (err) {
+      console.error("Failed to generate QR code:", err);
+      alert("Error generating QR code.");
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const openQrModal = (facility) => {
+    setActiveDropdown(null);
+    if (facility.qr_code_token) {
+      // Already exists — just view/print it, no regeneration.
+      setQrFacility(facility);
+    } else {
+      // First time — generate right away, no confirmation needed.
+      requestQrCode(facility, false);
+    }
+  };
+
+  const handleRegenerateQr = (facility) => {
+    if (window.confirm("This facility already has a QR code. Regenerating will invalidate the current code — any printed copies will stop working. Continue?")) {
+      requestQrCode(facility, true);
+    }
+  };
+
+  // The scanning app must send this exact string back as `qr_data` to
+  // POST /bookings/{id}/check-in — CheckInService::processQrCheckIn()
+  // does a strict comparison against the facility's qr_code_token, not a
+  // URL, so the QR encodes the bare token.
+  const qrValueFor = (token) => token;
+
+  const handlePrintQr = (facility) => {
+    const token = facility.qr_code_token;
+    if (!token) return;
+
+    const printWindow = window.open('', '_blank', 'width=420,height=560');
+    if (!printWindow) return;
+
+    // Render the QR into a hidden container first so we can grab its markup.
+    const container = document.getElementById(`qr-print-source-${token}`);
+    const svgMarkup = container ? container.innerHTML : '';
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>${facility.name} — Check-in QR Code</title>
+          <style>
+            body { font-family: system-ui, Arial, sans-serif; text-align: center; padding: 40px 20px; }
+            h1 { font-size: 20px; margin-bottom: 4px; }
+            p { color: #555; margin-top: 0; }
+            .qr-wrap { margin: 24px auto; display: inline-block; }
+          </style>
+        </head>
+        <body>
+          <h1>${facility.name}</h1>
+          <p>Scan to check in</p>
+          <div class="qr-wrap">${svgMarkup}</div>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    printWindow.close();
+  };
+
   // Helper to format "08:00:00" to "08:00 AM"
   const formatTime = (timeStr) => {
     if (!timeStr) return 'N/A';
@@ -211,6 +303,9 @@ export default function AdminView() {
                         {activeDropdown === rowId && (
                           <div style={styles.dropdownMenu}>
                             <button style={styles.dropdownItem} onClick={() => openModal(facility)}>Edit</button>
+                            <button style={styles.dropdownItem} onClick={() => openQrModal(facility)}>
+                              {facility.qr_code_token ? 'View / Print QR' : 'Generate QR Code'}
+                            </button>
                             <button style={{...styles.dropdownItem, color: '#c62828'}} onClick={() => handleDelete(rowId)}>Delete</button>
                           </div>
                         )}
@@ -328,6 +423,59 @@ export default function AdminView() {
 
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- QR CODE MODAL --- */}
+      {qrFacility && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0 }}>{qrFacility.name}</h3>
+              <button style={styles.iconButton} onClick={() => setQrFacility(null)}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ color: '#888', fontSize: '13px', margin: '4px 0 20px' }}>
+              Tenants scan this to check in.
+            </p>
+
+            <div style={{ textAlign: 'center' }}>
+              {qrLoading ? (
+                <div style={{ padding: '60px 0', color: '#888' }}>Generating…</div>
+              ) : qrFacility.qr_code_token ? (
+                <>
+                  <div id={`qr-print-source-${qrFacility.qr_code_token}`} style={{ display: 'inline-block', padding: '16px', border: '1px solid #eaeaea', borderRadius: '8px' }}>
+                    <QRCodeSVG value={qrValueFor(qrFacility.qr_code_token)} size={220} />
+                  </div>
+                  {qrFacility.qr_code_generated_at && (
+                    <div style={{ fontSize: '12px', color: '#aaa', marginTop: '10px' }}>
+                      Generated {new Date(qrFacility.qr_code_generated_at).toLocaleString()}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div style={{ padding: '60px 0', color: '#888' }}>No QR code yet.</div>
+              )}
+            </div>
+
+            <div style={{ ...styles.modalActions, justifyContent: 'space-between', marginTop: '24px' }}>
+              <button
+                style={{ ...styles.cancelButton, display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => handleRegenerateQr(qrFacility)}
+                disabled={qrLoading}
+              >
+                <RefreshCw size={14} /> Regenerate
+              </button>
+              <button
+                style={{ ...styles.saveButton, display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => handlePrintQr(qrFacility)}
+                disabled={qrLoading || !qrFacility.qr_code_token}
+              >
+                <Printer size={14} /> Print
+              </button>
             </div>
           </div>
         </div>

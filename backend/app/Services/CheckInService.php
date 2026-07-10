@@ -35,8 +35,21 @@ class CheckInService
             throw new Exception("This booking has already been checked in.");
         }
 
-        // Verification: Cross-check hardware token content matches asset context
-        if ($qrData !== (string) $booking->facility_id) {
+        // Verification: Cross-check scanned QR token against this facility's
+        // current qr_code_token (NOT facility_id — facility_id never changes,
+        // so checking against it would mean a photographed/leaked QR code
+        // works forever regardless of how many times a manager regenerates
+        // it from the Admin panel. qr_code_token is the rotating secret:
+        // FacilityController::generateQrCode() issues a fresh one on
+        // regeneration, which immediately invalidates every old printout).
+        $currentToken = $booking->facility->qr_code_token;
+
+        if (!$currentToken) {
+            $this->recordAttempt($booking, $userId, $now, 'Invalid_Location');
+            throw new Exception("This facility does not have an active QR code yet.");
+        }
+
+        if (!hash_equals($currentToken, $qrData)) {
             $this->recordAttempt($booking, $userId, $now, 'Invalid_Location');
             throw new Exception("Wrong QR Code! This code does not match your reserved facility.");
         }

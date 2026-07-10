@@ -6,6 +6,7 @@ use App\Models\Facility;
 use App\Services\SchedulingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 use Exception;
 
 class FacilityController extends Controller
@@ -197,5 +198,51 @@ class FacilityController extends Controller
                 'message' => $e->getMessage(),
             ], 404);
         }
+    }
+
+    /**
+     * POST /api/facilities/{id}/qr-code  (auth:sanctum, Manager only)
+     *
+     * Generates the single check-in QR code for a facility. Each facility
+     * gets exactly one token: if a token already exists, this call is a
+     * no-op UNLESS `confirm=true` is passed, in which case the old token
+     * is invalidated and a new one is issued (frontend is expected to show
+     * a confirmation dialog before sending confirm=true — see AdminView.jsx).
+     *
+     * The token itself is what gets encoded into the QR image (rendered
+     * client-side); it is what the tenant's scan hits at check-in time,
+     * e.g. GET /checkin/{qr_code_token}.
+     */
+    public function generateQrCode(Request $request, int $id): JsonResponse
+    {
+        $facility = Facility::findOrFail($id);
+
+        $alreadyExists = !empty($facility->qr_code_token);
+
+        if ($alreadyExists && !$request->boolean('confirm')) {
+            return response()->json([
+                'success' => true,
+                'requires_confirmation' => true,
+                'message' => 'A QR code already exists for this facility. Resend with confirm=true to regenerate (this invalidates the old code).',
+                'data' => [
+                    'qr_code_token' => $facility->qr_code_token,
+                    'qr_code_generated_at' => $facility->qr_code_generated_at,
+                ],
+            ]);
+        }
+
+        $facility->qr_code_token = (string) Str::uuid();
+        $facility->qr_code_generated_at = now();
+        $facility->save();
+
+        return response()->json([
+            'success' => true,
+            'requires_confirmation' => false,
+            'message' => $alreadyExists ? 'QR code regenerated. The old code no longer works.' : 'QR code generated.',
+            'data' => [
+                'qr_code_token' => $facility->qr_code_token,
+                'qr_code_generated_at' => $facility->qr_code_generated_at,
+            ],
+        ]);
     }
 }

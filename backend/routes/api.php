@@ -35,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/facilities/{id}',         [FacilityController::class, 'update']);
     Route::delete('/facilities/{id}',      [FacilityController::class, 'destroy']);
     Route::patch('/facilities/{id}/status',[FacilityController::class, 'updateStatus']);
+    Route::post('/facilities/{id}/qr-code',[FacilityController::class, 'generateQrCode']);
 
     // Booking modal "Available Time Slots" list — only slots flagged
     // available=true are selectable on the frontend.
@@ -95,4 +96,5 @@ Route::middleware('auth:sanctum')->group(function () {
     // ApprovalController routes above, which are what's actually wired up
     // to WorkflowService now.
     Route::get('/approval-logs/{request_id}', [ApprovalLogController::class, 'index']);
+    
 });

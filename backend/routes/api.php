@@ -78,10 +78,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/{id}/pdf',     [ReportController::class, 'exportPDF']);
     Route::get('/reports/{id}/csv',     [ReportController::class, 'exportCSV']);
 
-    // ── Governance / Testing (teammate's existing endpoints — untouched) ────────
+    // ── Governance / Testing ────────
     Route::prefix('governance')->group(function () {
         Route::get('/rules/{facility_id}', [OperationalRuleController::class, 'show']);
         Route::post('/rules',              [OperationalRuleController::class, 'store']);
+    });
+
+    // Custom route to fetch workflow tiers for the React frontend dropdown
+    Route::get('/workflow-tiers', function () {
+        return response()->json([
+            'success' => true,
+            'data' => \App\Models\WorkflowTier::all()
+        ]);
     });
 
     Route::prefix('workflow')->group(function () {

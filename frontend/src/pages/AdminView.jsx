@@ -70,7 +70,8 @@ export default function AdminView() {
   const fetchBookingRequests = async () => {
     setLoadingRequests(true);
     try {
-      const response = await api.get('/booking-requests');
+      // FIXED: Pointing to SY's specific route for pending requests
+      const response = await api.get('/approvals/pending');
       setBookingRequests(response.data.data || response.data);
     } catch (err) {
       console.error("Failed to fetch booking requests.", err);
@@ -82,7 +83,13 @@ export default function AdminView() {
   const handleUpdateStatus = async (id, newStatus) => {
     if (window.confirm(`Are you sure you want to ${newStatus.toUpperCase()} this request?`)) {
       try {
-        await api.put(`/booking-requests/${id}/status`, { status: newStatus });
+        if (newStatus === 'Approved') {
+          await api.post(`/approvals/${id}/approve`);
+        } else {
+          await api.post(`/approvals/${id}/reject`);
+        }
+        
+        // Refresh the list immediately to remove the actioned item
         fetchBookingRequests();
       } catch (err) {
         console.error("Failed to update status:", err);
@@ -422,7 +429,14 @@ export default function AdminView() {
                       <label style={styles.label}>Approval Tier</label>
                       <select name="workflow_tier_id" value={formData.workflow_tier_id} onChange={handleInputChange} style={styles.input}>
                         <option value="">Auto-Approve (Tier 0)</option>
-                        {workflowTiers.map(tier => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
+                        {workflowTiers.map(tier => {
+                          const tId = tier.tier_id || tier.id;
+                          return (
+                            <option key={tId} value={tId}>
+                              Tier {tier.tier_level} ({tier.assigned_role} Approval)
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div style={styles.inputGroup}>
@@ -468,32 +482,39 @@ export default function AdminView() {
                   ) : bookingRequests.length === 0 ? (
                     <tr><td colSpan="6" style={styles.emptyState}>No pending requests. All caught up! 🎉</td></tr>
                   ) : (
-                    bookingRequests.map((request) => (
-                      <tr key={request.id} style={styles.tableRow}>
-                        <td style={{...styles.td, fontWeight: 'bold', color: '#555'}}>#{request.id}</td>
-                        <td style={styles.td}>{request.user?.name || 'Unknown Resident'}</td>
-                        <td style={{...styles.td, fontWeight: 'bold'}}>{request.facility?.name || 'Unknown Facility'}</td>
-                        <td style={styles.td}>
-                          {formatDateTime(request.start_time)} <br/>
-                          <span style={{color: '#888', fontSize: '12px'}}>to {formatDateTime(request.end_time)}</span>
-                        </td>
-                        <td style={styles.td}>
-                          <span style={request.status === 'Pending' ? styles.statusWarning : request.status === 'Approved' ? styles.statusActive : styles.statusRejected}>
-                            {request.status}
-                          </span>
-                        </td>
-                        <td style={{...styles.td, textAlign: 'center'}}>
-                          {request.status === 'Pending' || request.status === 'pending' ? (
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                              <button style={styles.approveBtn} onClick={() => handleUpdateStatus(request.id, 'Approved')}><Check size={16} /> Approve</button>
-                              <button style={styles.rejectBtn} onClick={() => handleUpdateStatus(request.id, 'Rejected')}><XCircle size={16} /> Reject</button>
-                            </div>
-                          ) : (
-                            <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                    bookingRequests.map((request) => {
+                      // Adapt to SY's strict UML naming conventions
+                      const rId = request.request_id || request.id;
+                      const requestUser = request.get_user || request.user;
+                      const requestFacility = request.get_facility || request.facility;
+
+                      return (
+                        <tr key={rId} style={styles.tableRow}>
+                          <td style={{...styles.td, fontWeight: 'bold', color: '#555'}}>#{rId}</td>
+                          <td style={styles.td}>{requestUser?.name || 'Unknown Resident'}</td>
+                          <td style={{...styles.td, fontWeight: 'bold'}}>{requestFacility?.name || 'Unknown Facility'}</td>
+                          <td style={styles.td}>
+                            {formatDateTime(request.start_time)} <br/>
+                            <span style={{color: '#888', fontSize: '12px'}}>to {formatDateTime(request.end_time)}</span>
+                          </td>
+                          <td style={styles.td}>
+                            <span style={request.status === 'Pending' ? styles.statusWarning : request.status === 'Approved' ? styles.statusActive : styles.statusRejected}>
+                              {request.status}
+                            </span>
+                          </td>
+                          <td style={{...styles.td, textAlign: 'center'}}>
+                            {request.status === 'Pending' || request.status === 'pending' ? (
+                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                                <button style={styles.approveBtn} onClick={() => handleUpdateStatus(rId, 'Approved')}><Check size={16} /> Approve</button>
+                                <button style={styles.rejectBtn} onClick={() => handleUpdateStatus(rId, 'Rejected')}><XCircle size={16} /> Reject</button>
+                              </div>
+                            ) : (
+                              <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

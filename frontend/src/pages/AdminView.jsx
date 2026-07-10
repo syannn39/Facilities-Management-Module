@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react'; // SY's QR package
+import { QRCodeSVG } from 'qrcode.react'; // QR package
 import api from '../api';
 
 export default function AdminView() {
@@ -23,13 +23,14 @@ export default function AdminView() {
   const [editingId, setEditingId] = useState(null);
   const [viewingFacility, setViewingFacility] = useState(null);
   
-  // --- QR CODE STATE (SY's Addition) ---
+  // --- QR CODE STATE ---
   const [qrFacility, setQrFacility] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', category: 'Standard', status: 'active', image_url: '',
-    workflow_tier_id: '', capacity: '', advance_booking_limit: 30
+    workflow_tier_id: '', capacity: '', advance_booking_limit: 30,
+    grace_period_minutes: 15 
   });
 
   // --- TAB ROUTING EFFECT ---
@@ -70,7 +71,6 @@ export default function AdminView() {
   const fetchBookingRequests = async () => {
     setLoadingRequests(true);
     try {
-      // FIXED: Pointing to SY's specific route for pending requests
       const response = await api.get('/approvals/pending');
       setBookingRequests(response.data.data || response.data);
     } catch (err) {
@@ -111,13 +111,16 @@ export default function AdminView() {
       setEditingId(rowId);
       setFormData({
         name: facility.name, category: facility.category || 'Standard', status: facility.status || 'active',
-        image_url: facility.image_url || '', workflow_tier_id: facility.workflow_tier_id || '',
+        image_url: facility.image_url || '', 
+        // THE FIX: Look inside get_operational_rule for the approval_tier!
+        workflow_tier_id: facility.get_operational_rule?.approval_tier || '',
         capacity: facility.get_operational_rule?.max_capacity || '',
-        advance_booking_limit: facility.get_operational_rule?.advance_booking_limit || 30
+        advance_booking_limit: facility.get_operational_rule?.advance_booking_limit || 30,
+        grace_period_minutes: facility.get_operational_rule?.grace_period_minutes || 15
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', category: 'Standard', status: 'active', image_url: '', workflow_tier_id: '', capacity: '', advance_booking_limit: 30 });
+      setFormData({ name: '', category: 'Standard', status: 'active', image_url: '', workflow_tier_id: '', capacity: '', advance_booking_limit: 30, grace_period_minutes: 15 });
     }
     setIsModalOpen(true);
   };
@@ -130,16 +133,64 @@ export default function AdminView() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...formData, workflow_tier_id: formData.workflow_tier_id === '' ? null : formData.workflow_tier_id };
+      // send all facility data AND all rules data at once. 
+      const unifiedPayload = {
+        name: formData.name,
+        category: formData.category,
+        status: formData.status,
+        image_url: formData.image_url,
+        capacity: formData.capacity,            
+        max_capacity: formData.capacity,        
+        advance_booking_limit: formData.advance_booking_limit,
+        workflow_tier_id: formData.workflow_tier_id === '' ? null : formData.workflow_tier_id,
+        approval_tier: formData.workflow_tier_id === '' ? 0 : formData.workflow_tier_id,
+        grace_period_minutes: formData.grace_period_minutes || 15 
+      };
+
+      let facilityIdToUse = editingId;
+
+      // Step 1: Hit the main Facility route
       if (editingId) {
-        await api.put(`/facilities/${editingId}`, payload);
+        await api.put(`/facilities/${editingId}`, unifiedPayload);
       } else {
-        await api.post('/facilities', payload);
+        const response = await api.post('/facilities', unifiedPayload);
+        
+        facilityIdToUse = 
+          response.data?.data?.facility_id || 
+          response.data?.data?.id || 
+          response.data?.facility_id || 
+          response.data?.id;
+
+        // Safety check so we know exactly if the backend hid the ID!
+        if (!facilityIdToUse) {
+          console.error("Backend response:", response);
+          alert("Warning: Facility created, but we couldn't read the new ID from Laravel. Rules were skipped!");
+        }
       }
+
+      // Step 2: Hit the Governance route 
+      if (facilityIdToUse) {
+        const rulesPayload = {
+          facility_id: facilityIdToUse,
+          ...unifiedPayload // Spread the exact same bulletproof data here too
+        };
+        
+        // use a try/catch here so that if Step 1 actually handled everything
+        // and Step 2 fails, it doesn't crash the whole screen.
+        try {
+          await api.post('/governance/rules', rulesPayload);
+        } catch (ruleErr) {
+          console.warn("Governance route skipped or failed, but facility saved.", ruleErr);
+        }
+      }
+
       closeModal();
-      fetchFacilities();
+      fetchFacilities(); // Refresh the list!
+      
     } catch (err) {
-      alert("Error saving facility.");
+      console.error("Failed to save:", err.response?.data || err);
+      // This will pop up an alert showing the EXACT backend error if it fails again
+      alert(`Backend Error: ${JSON.stringify(err.response?.data?.errors || err.response?.data?.message || "Unknown error")}`);
     }
   };
 
@@ -308,7 +359,15 @@ export default function AdminView() {
                           <td style={{...styles.td, textTransform: 'capitalize'}}>{facility.category || 'Standard'}</td>
                           <td style={styles.td}>{facility.get_operational_rule?.max_capacity || 'N/A'}</td>
                           <td style={styles.td}>{facility.get_operational_rule?.advance_booking_limit ? `${facility.get_operational_rule.advance_booking_limit} days` : 'Not set'}</td>
-                          <td style={styles.td}><span style={styles.tierBadge}>{facility.workflow_tier?.name || 'Auto-Approve (Tier 0)'}</span></td>
+                          <td style={styles.td}><span style={styles.tierBadge}>{(() => {// Look up the exact tier based on the nested approval_tier ID
+                                const tierId = facility.get_operational_rule?.approval_tier;
+                                if (!tierId || tierId === 0) return 'Auto-Approve (Tier 0)';
+                                
+                                const matchedTier = workflowTiers.find(t => (t.id || t.tier_id) === tierId);
+                                return matchedTier ? `Tier ${matchedTier.tier_level} (${matchedTier.assigned_role})` : `Tier ${tierId}`;
+                              })()}
+                            </span>
+                          </td>
                           <td style={styles.td}><span style={facility.status === 'active' ? styles.statusActive : styles.statusWarning}>{facility.status || 'Active'}</span></td>
                           
                           <td style={{...styles.td, position: 'relative', textAlign: 'center'}}>
@@ -375,7 +434,7 @@ export default function AdminView() {
               </div>
             )}
 
-            {/* SY's QR CODE MODAL */}
+            {/* QR CODE MODAL */}
             {qrFacility && (
               <div style={styles.modalOverlay}>
                 <div style={styles.modalContent}>
@@ -424,6 +483,7 @@ export default function AdminView() {
                     <div style={styles.inputGroup}><label style={styles.label}>Category</label><input required type="text" name="category" value={formData.category} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Max Capacity</label><input required type="number" name="capacity" value={formData.capacity} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Advance Booking Limit (Days)</label><input required type="number" name="advance_booking_limit" value={formData.advance_booking_limit} onChange={handleInputChange} style={styles.input} /></div>
+                    <div style={styles.inputGroup}><label style={styles.label}>Grace Period (Minutes)</label><input required type="number" name="grace_period_minutes" value={formData.grace_period_minutes} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Image URL</label><input type="text" name="image_url" value={formData.image_url} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}>
                       <label style={styles.label}>Approval Tier</label>
@@ -483,7 +543,6 @@ export default function AdminView() {
                     <tr><td colSpan="6" style={styles.emptyState}>No pending requests. All caught up! 🎉</td></tr>
                   ) : (
                     bookingRequests.map((request) => {
-                      // Adapt to SY's strict UML naming conventions
                       const rId = request.request_id || request.id;
                       const requestUser = request.get_user || request.user;
                       const requestFacility = request.get_facility || request.facility;

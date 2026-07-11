@@ -1,8 +1,8 @@
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import React, { useState, useEffect } from 'react';
 import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle, Eye} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react'; // QR package
 import api from '../api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function AdminView() {
   // --- LAYOUT & TABS STATE ---
@@ -687,8 +687,8 @@ const handleProcessRequest = async (status) => {
                 }}>
                   {viewingRequest.guest_count || 0} 
                   <span style={{ color: '#999', fontSize: '12px', marginLeft: '4px' }}>
-                  (Max: {viewingRequest.facility?.get_operational_rule?.max_capacity || 'N/A'})
-                </span>
+                    (Max: {viewingRequest.facility?.get_operational_rule?.max_capacity || 'N/A'})
+                  </span>
                 </span>
               </div>
 

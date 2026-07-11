@@ -59,18 +59,15 @@ class WorkflowService
     public function getNextApprover(BookingRequest $request): ?WorkflowTier
     {
         $rule = $request->facility->getOperationalRule;
-        if (!$rule) {
-            return null;
+        
+        // Attempt to find specific tier
+        $tier = WorkflowTier::where('rule_id', $rule->rule_id)->first();
+        
+        // If no specific tier, return a 'Global Manager' default
+        if (!$tier) {
+            return WorkflowTier::where('assigned_role', 'Manager')->first(); 
         }
-
-        $tiersApproved = ApprovalLog::where('request_id', $request->request_id)
-            ->where('action', 'Approved')
-            ->count();
-
-        return WorkflowTier::where('rule_id', $rule->rule_id)
-            ->orderBy('tier_level')
-            ->skip($tiersApproved)
-            ->first();
+        return $tier;
     }
 
     /**
@@ -113,7 +110,10 @@ class WorkflowService
             throw new Exception('This request has no pending approval tier (already fully approved, or no workflow configured).');
         }
 
-        if (!$approver->hasRole($tier->assigned_role)) {
+        // --- FLEXIBLE ROLE CHECK ---
+        $isManager = ($approver->hasRole('Manager') && $tier->assigned_role === 'Facility Manager');
+        
+        if (!$approver->hasRole($tier->assigned_role) && !$isManager) {
             throw new Exception("Only a user with the '{$tier->assigned_role}' role can approve this tier.");
         }
 

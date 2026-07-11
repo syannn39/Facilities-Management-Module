@@ -7,6 +7,7 @@ use App\Services\WorkflowService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Exception;
+use Illuminate\Support\Facades\Log;
 
 /**
  * ApprovalController — Class Diagram Figure 4.3.2.
@@ -32,14 +33,21 @@ class ApprovalController extends Controller
     {
         $manager = $request->user();
 
-        $pending = BookingRequest::with('facility', 'user')
+        $allPending = BookingRequest::with('facility', 'user')
             ->where('status', 'Pending')
-            ->get()
-            ->filter(function (BookingRequest $bookingRequest) use ($manager) {
-                $tier = $this->workflowService->getNextApprover($bookingRequest);
-                return $tier && $manager->hasRole($tier->assigned_role);
-            })
-            ->values();
+            ->get();
+
+        // LOGGING: Let's see what the system thinks about each request
+        foreach ($allPending as $req) {
+            $tier = $this->workflowService->getNextApprover($req);
+            $hasRole = $tier ? $manager->hasRole($tier->assigned_role) : false;
+            Log::info("Request {$req->request_id} Check: Tier found? " . ($tier ? "Yes" : "No") . " | Role match? " . ($hasRole ? "Yes" : "No"));
+        }
+
+        $pending = $allPending->filter(function (BookingRequest $bookingRequest) use ($manager) {
+            $tier = $this->workflowService->getNextApprover($bookingRequest);
+            return $tier && $manager->hasRole($tier->assigned_role);
+        })->values();
 
         return response()->json([
             'success' => true,
@@ -55,6 +63,8 @@ class ApprovalController extends Controller
         $bookingRequest = BookingRequest::findOrFail($request_id);
 
         try {
+            $bookingRequest->update(['status' => 'Approved']);
+            
             $this->workflowService->processApproval($bookingRequest, $request->user());
 
             return response()->json([

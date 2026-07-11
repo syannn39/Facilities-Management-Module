@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle } from 'lucide-react';
+import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle, Eye} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react'; // QR package
 import api from '../api';
 
@@ -22,6 +22,10 @@ export default function AdminView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewingFacility, setViewingFacility] = useState(null);
+
+  // --- REVIEW MODAL STATE ---
+  const [viewingRequest, setViewingRequest] = useState(null);
+  const [requestRemarks, setRequestRemarks] = useState('');
   
   // --- QR CODE STATE ---
   const [qrFacility, setQrFacility] = useState(null);
@@ -80,20 +84,31 @@ export default function AdminView() {
     }
   };
 
-  const handleUpdateStatus = async (id, newStatus) => {
-    if (window.confirm(`Are you sure you want to ${newStatus.toUpperCase()} this request?`)) {
+const handleProcessRequest = async (status) => {
+    if (!viewingRequest) return;
+    const rId = viewingRequest.request_id || viewingRequest.id;
+
+    if (status === 'Rejected' && !requestRemarks.trim()) {
+      alert("Please enter a reason for rejection.");
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to ${status.toUpperCase()} this request?`)) {
       try {
-        if (newStatus === 'Approved') {
-          await api.post(`/approvals/${id}/approve`);
+        const payload = { remarks: requestRemarks };
+        
+        if (status === 'Approved') {
+          await api.post(`/approvals/${rId}/approve`, payload);
         } else {
-          await api.post(`/approvals/${id}/reject`);
+          await api.post(`/approvals/${rId}/reject`, payload);
         }
         
-        // Refresh the list immediately to remove the actioned item
+        setViewingRequest(null);
+        setRequestRemarks('');
         fetchBookingRequests();
       } catch (err) {
-        console.error("Failed to update status:", err);
-        alert("Error updating request status.");
+        console.error("Failed to process request:", err);
+        alert(`Error: ${err.response?.data?.message || "Failed to update request."}`);
       }
     }
   };
@@ -133,19 +148,27 @@ export default function AdminView() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // send all facility data AND all rules data at once. 
-      const unifiedPayload = {
-        name: formData.name,
-        category: formData.category,
-        status: formData.status,
-        image_url: formData.image_url,
-        capacity: formData.capacity,            
-        max_capacity: formData.capacity,        
+      // Instead of just doing a POST, check if we are editing
+      const rulePayload = {
+        facility_id: facilityIdToUse,
+        max_capacity: formData.capacity,
+        opening_time: '08:00:00', // adjust as needed
+        closing_time: '22:00:00',
         advance_booking_limit: formData.advance_booking_limit,
-        workflow_tier_id: formData.workflow_tier_id === '' ? null : formData.workflow_tier_id,
-        approval_tier: formData.workflow_tier_id === '' ? 0 : formData.workflow_tier_id,
-        grace_period_minutes: formData.grace_period_minutes || 15 
+        approval_tier: formData.workflow_tier_id,
+        grace_period_minutes: formData.grace_period_minutes
       };
+
+      // 1. Check if the facility already HAS a rule
+      const existingRule = facility.get_operational_rule; 
+
+      if (existingRule) {
+        // UPDATE existing
+        await api.put(`/operational-rules/${existingRule.rule_id}`, rulePayload);
+      } else {
+        // CREATE new
+        await api.post('/operational-rules', rulePayload);
+      }
 
       let facilityIdToUse = editingId;
 
@@ -411,7 +434,17 @@ export default function AdminView() {
                         <div><div style={styles.detailLabel}>Facility Type</div><div style={styles.detailValue}>{viewingFacility.category || 'Standard'}</div></div>
                         <div><div style={styles.detailLabel}>Maximum Capacity</div><div style={styles.detailValue}>{viewingFacility.get_operational_rule?.max_capacity || 'N/A'} people</div></div>
                         <div><div style={styles.detailLabel}>Advance Booking Limit</div><div style={styles.detailValue}>{viewingFacility.get_operational_rule?.advance_booking_limit || 0} days</div></div>
-                        <div><div style={styles.detailLabel}>Approval Requirement</div><div style={styles.detailValue}>{viewingFacility.workflow_tier?.name || 'Instant Booking'}</div></div>
+                        <div>
+                          <div style={styles.detailLabel}>Approval Requirement</div>
+                          <div style={styles.detailValue}>
+                            {(() => {
+                              const tierId = viewingFacility.get_operational_rule?.approval_tier;
+                              if (!tierId || tierId === 0) return 'Instant Booking';
+                              const matchedTier = workflowTiers.find(t => (t.id || t.tier_id) === tierId);
+                              return matchedTier ? `Tier ${matchedTier.tier_level} Approval` : `Tier ${tierId} Approval`;
+                            })()}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     <div style={styles.detailCard}>
@@ -563,10 +596,14 @@ export default function AdminView() {
                           </td>
                           <td style={{...styles.td, textAlign: 'center'}}>
                             {request.status === 'Pending' || request.status === 'pending' ? (
-                              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                                <button style={styles.approveBtn} onClick={() => handleUpdateStatus(rId, 'Approved')}><Check size={16} /> Approve</button>
-                                <button style={styles.rejectBtn} onClick={() => handleUpdateStatus(rId, 'Rejected')}><XCircle size={16} /> Reject</button>
-                              </div>
+                              <button style={styles.reviewBtn} 
+                              onClick={() => {
+                                setViewingRequest(request);
+                                setRequestRemarks('');
+                              }}
+                            >
+                              <Eye size={16} /> Review
+                            </button>
                             ) : (
                               <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
                             )}
@@ -577,6 +614,63 @@ export default function AdminView() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* --- REVIEW REQUEST MODAL --- */}
+        {viewingRequest && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modalContent}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ margin: 0 }}>Review Booking Request</h3>
+                <button style={styles.iconButton} onClick={() => setViewingRequest(null)}><X size={20} /></button>
+              </div>
+              
+              <div style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #eaeaea' }}>
+                <div style={styles.flexBetween}>
+                  <span style={styles.detailLabel}>Resident</span>
+                  <span style={styles.detailValue}>{viewingRequest.get_user?.name || viewingRequest.user?.name}</span>
+                </div>
+                <div style={styles.flexBetween}>
+                  <span style={styles.detailLabel}>Facility</span>
+                  <span style={{...styles.detailValue, fontWeight: 'bold'}}>{viewingRequest.get_facility?.name || viewingRequest.facility?.name}</span>
+                </div>
+                <div style={styles.flexBetween}>
+                  <span style={styles.detailLabel}>Start Time</span>
+                  <span style={styles.detailValue}>{formatDateTime(viewingRequest.start_time)}</span>
+                </div>
+                <div style={styles.flexBetween}>
+                  <span style={styles.detailLabel}>End Time</span>
+                  <span style={styles.detailValue}>{formatDateTime(viewingRequest.end_time)}</span>
+                </div>
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Remarks / Reason <span style={{color: '#ef6c00', fontWeight: 'normal'}}>(Required for rejection)</span></label>
+                <textarea 
+                  rows="3" 
+                  style={{...styles.input, resize: 'vertical'}} 
+                  placeholder="Enter any notes for the resident..."
+                  value={requestRemarks}
+                  onChange={(e) => setRequestRemarks(e.target.value)}
+                />
+              </div>
+
+              <div style={{ ...styles.modalActions, marginTop: '24px' }}>
+                <button 
+                  style={styles.cancelActionBtn} 
+                  onClick={() => handleProcessRequest('Rejected')}
+                >
+                  <XCircle size={16} /> Reject Request
+                </button>
+                <button 
+                  style={styles.confirmActionBtn} 
+                  onClick={() => handleProcessRequest('Approved')}
+                >
+                  <Check size={16} /> Approve Request
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -655,5 +749,10 @@ const styles = {
   input: { padding: '10px', borderRadius: '6px', border: '1px solid #ccc', fontSize: '14px', backgroundColor: '#fff' },
   modalActions: { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' },
   cancelButton: { padding: '10px 16px', backgroundColor: '#f5f5f5', border: '1px solid #ddd', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', color: '#555' },
-  saveButton: { padding: '10px 16px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+  saveButton: { padding: '10px 16px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
+
+  // Add these to your styles object
+  reviewBtn: { padding: '6px 16px', backgroundColor: 'white', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontWeight: '600', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 auto', transition: 'all 0.2s', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
+  confirmActionBtn: { padding: '10px 16px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' },
+  cancelActionBtn: { padding: '10px 16px', backgroundColor: 'white', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' },
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle, Eye} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react'; // QR package
 import api from '../api';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function AdminView() {
   // --- LAYOUT & TABS STATE ---
@@ -564,6 +565,8 @@ const handleProcessRequest = async (status) => {
                     <th style={styles.th}>Request ID</th>
                     <th style={styles.th}>Resident</th>
                     <th style={styles.th}>Facility</th>
+                    <th style={styles.th}>Purpose</th>
+                    <th style={styles.th}>Guests</th>
                     <th style={styles.th}>Requested Slot</th>
                     <th style={styles.th}>Status</th>
                     <th style={{...styles.th, textAlign: 'center'}}>Decision</th>
@@ -571,9 +574,9 @@ const handleProcessRequest = async (status) => {
                 </thead>
                 <tbody>
                   {loadingRequests ? (
-                    <tr><td colSpan="6" style={styles.emptyState}>Loading requests...</td></tr>
+                    <tr><td colSpan="8" style={styles.emptyState}>Loading requests...</td></tr>
                   ) : bookingRequests.length === 0 ? (
-                    <tr><td colSpan="6" style={styles.emptyState}>No pending requests. All caught up! 🎉</td></tr>
+                    <tr><td colSpan="8" style={styles.emptyState}>No pending requests. All caught up! 🎉</td></tr>
                   ) : (
                     bookingRequests.map((request) => {
                       const rId = request.request_id || request.id;
@@ -582,21 +585,42 @@ const handleProcessRequest = async (status) => {
 
                       return (
                         <tr key={rId} style={styles.tableRow}>
-                          <td style={{...styles.td, fontWeight: 'bold', color: '#555'}}>#{rId}</td>
-                          <td style={styles.td}>{requestUser?.name || 'Unknown Resident'}</td>
-                          <td style={{...styles.td, fontWeight: 'bold'}}>{requestFacility?.name || 'Unknown Facility'}</td>
-                          <td style={styles.td}>
-                            {formatDateTime(request.start_time)} <br/>
-                            <span style={{color: '#888', fontSize: '12px'}}>to {formatDateTime(request.end_time)}</span>
-                          </td>
-                          <td style={styles.td}>
-                            <span style={request.status === 'Pending' ? styles.statusWarning : request.status === 'Approved' ? styles.statusActive : styles.statusRejected}>
-                              {request.status}
-                            </span>
-                          </td>
-                          <td style={{...styles.td, textAlign: 'center'}}>
-                            {request.status === 'Pending' || request.status === 'pending' ? (
-                              <button style={styles.reviewBtn} 
+                        {/* 1. Request ID */}
+                        <td style={{...styles.td, fontWeight: 'bold', color: '#555'}}>#{rId}</td>
+                        
+                        {/* 2. Resident */}
+                        <td style={styles.td}>{requestUser?.name || 'Unknown Resident'}</td>
+                        
+                        {/* 3. Facility */}
+                        <td style={{...styles.td, fontWeight: 'bold'}}>{requestFacility?.name || 'Unknown Facility'}</td>
+                        
+                        {/* 4. Purpose */}
+                        <td style={{...styles.td, fontStyle: 'italic', color: '#666', fontSize: '13px'}}>
+                          {request.purpose_of_use || '-'}
+                        </td>
+
+                        {/* 5. Guests */}
+                        <td style={{...styles.td, textAlign: 'center'}}>
+                          {request.guest_count || 0}
+                        </td>
+
+                        {/* 6. Requested Slot (This was missing/shifted!) */}
+                        <td style={styles.td}>
+                          {formatDateTime(request.start_time)} <br/>
+                          <span style={{color: '#888', fontSize: '12px'}}>to {formatDateTime(request.end_time)}</span>
+                        </td>
+                        
+                        {/* 7. Status */}
+                        <td style={styles.td}>
+                          <span style={request.status === 'Pending' ? styles.statusWarning : request.status === 'Approved' ? styles.statusActive : styles.statusRejected}>
+                            {request.status}
+                          </span>
+                        </td>
+                        
+                        {/* 8. Decision (Button) */}
+                        <td style={{...styles.td, textAlign: 'center'}}>
+                          {request.status === 'Pending' || request.status === 'pending' ? (
+                            <button style={styles.reviewBtn} 
                               onClick={() => {
                                 setViewingRequest(request);
                                 setRequestRemarks('');
@@ -604,11 +628,11 @@ const handleProcessRequest = async (status) => {
                             >
                               <Eye size={16} /> Review
                             </button>
-                            ) : (
-                              <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
-                            )}
-                          </td>
-                        </tr>
+                          ) : (
+                            <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
+                          )}
+                        </td>
+                      </tr>
                       );
                     })
                   )}
@@ -646,6 +670,28 @@ const handleProcessRequest = async (status) => {
                 </div>
               </div>
 
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ color: '#666', fontSize: '14px' }}>Purpose</span>
+                <span style={{ fontWeight: '500', fontSize: '14px', textAlign: 'right', maxWidth: '60%' }}>
+                  {viewingRequest.purpose_of_use || 'No purpose provided'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <span style={{ color: '#666', fontSize: '14px' }}>Guest Count</span>
+                <span style={{ 
+                  fontWeight: '500', 
+                  fontSize: '14px',
+                  /* Optional: Turn text red if it exceeds capacity */
+                  color: viewingRequest.guest_count > (viewingRequest.facility?.max_capacity || 999) ? 'red' : 'inherit'
+                }}>
+                  {viewingRequest.guest_count || 0} 
+                  <span style={{ color: '#999', fontSize: '12px', marginLeft: '4px' }}>
+                  (Max: {viewingRequest.facility?.get_operational_rule?.max_capacity || 'N/A'})
+                </span>
+                </span>
+              </div>
+
               <div style={styles.inputGroup}>
                 <label style={styles.label}>Remarks / Reason <span style={{color: '#ef6c00', fontWeight: 'normal'}}>(Required for rejection)</span></label>
                 <textarea 
@@ -678,13 +724,84 @@ const handleProcessRequest = async (status) => {
         {/* --- VIEW: REPORTS --- */}
         {activeTab === 'reports' && (
           <div style={styles.pageContainer}>
-            <h2 style={styles.title}>Analytics & Reports</h2>
-            <div style={styles.detailCard}>
-              <p style={{color: '#555'}}>The Reports module will be built here.</p>
+            {/* Header & Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={styles.title}>Facility Usage Reports</h2>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button style={{...styles.reviewBtn, backgroundColor: '#333', color: 'white'}}>Generate Report</button>
+                <button style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}>⬇ Export PDF</button>
+                <button style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}>⬇ Export CSV</button>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <select style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}>
+                <option>All Facilities</option>
+                <option>Multi-Purpose Hall</option>
+                <option>BBQ Pit</option>
+              </select>
+              <select style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}>
+                <option>Last 30 Days</option>
+                <option>This Year</option>
+              </select>
+            </div>
+
+            {/* KPI Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '24px' }}>
+              {/* Card 1 */}
+              <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Total Bookings</p>
+                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>226</h3>
+                <p style={{ margin: 0, color: '#10b981', fontSize: '12px', fontWeight: 'bold' }}>↑ +12% from last month</p>
+              </div>
+              {/* Card 2 */}
+              <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Cancellation Rate</p>
+                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>8.5%</h3>
+                <p style={{ margin: 0, color: '#ef4444', fontSize: '12px', fontWeight: 'bold' }}>↑ +2% from last month</p>
+              </div>
+              {/* Card 3 */}
+              <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Auto-Cancelled No-Shows</p>
+                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>12</h3>
+                <p style={{ margin: 0, color: '#10b981', fontSize: '12px', fontWeight: 'bold' }}>↓ -3 from last month</p>
+              </div>
+            </div>
+
+            {/* Chart Section */}
+            <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <h4 style={{ margin: '0 0 20px 0', color: '#333' }}>Booking Frequency by Facility</h4>
+              <div style={{ width: '100%', height: 350 }}>
+                <ResponsiveContainer>
+                  <BarChart data={[
+                    { name: 'Tennis Court', bookings: 45 },
+                    { name: 'BBQ Pit', bookings: 32 },
+                    { name: 'Multi-Purpose Hall', bookings: 28 },
+                    { name: 'Gym', bookings: 68 },
+                    { name: 'Swimming Pool', bookings: 54 },
+                  ]}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                    <XAxis dataKey="name" tick={{fill: '#666'}} axisLine={{stroke: '#ccc'}} tickLine={false} />
+                    <YAxis tick={{fill: '#666'}} axisLine={false} tickLine={false} />
+                    <Tooltip 
+                      cursor={{fill: '#f9fafb'}}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                    />
+                    <Bar dataKey="bookings" radius={[4, 4, 0, 0]}>
+                      {/* Optional: Add custom colors to the bars here if desired */}
+                      <Cell fill="#3b82f6" /> 
+                      <Cell fill="#3b82f6" />
+                      <Cell fill="#3b82f6" />
+                      <Cell fill="#3b82f6" />
+                      <Cell fill="#3b82f6" />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

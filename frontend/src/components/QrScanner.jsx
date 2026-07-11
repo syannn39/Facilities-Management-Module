@@ -5,58 +5,67 @@ import api from '../api';
 export default function QrScanner({ bookingId }) {
     const [scanFeedback, setScanFeedback] = useState('');
     const [isSuccess, setIsSuccess] = useState(false);
+    const [isProcessing, setIsProcessing] = useState(false);
     const scannerRef = useRef(null);
 
     useEffect(() => {
-        // Safety check: ensure container exists
         const container = document.getElementById("reader-container");
         if (!container) return;
 
-        try {
-            scannerRef.current = new Html5QrcodeScanner("reader-container", { 
-                fps: 10, 
-                qrbox: { width: 250, height: 250 } 
-            }, false);
+        scannerRef.current = new Html5QrcodeScanner("reader-container", {
+            fps: 10,
+            qrbox: { width: 300, height: 300 }
+        }, false);
 
-            scannerRef.current.render(
-                async (decodedText) => {
-                    if (scannerRef.current) {
-                        await scannerRef.current.clear().catch(console.error);
+        scannerRef.current.render(
+            async (decodedText) => {
+                if (isProcessing) return;
+
+                setIsProcessing(true);
+                setScanFeedback("Processing...");
+
+                try {
+                    if (scannerRef.current) await scannerRef.current.clear().catch(() => { });
+
+                    const response = await api.post(`/bookings/${bookingId}/check-in`, {
+                        qr_data: decodedText
+                    });
+
+                    if (response.data.success) {
+                        setIsSuccess(true);
+                        setScanFeedback(response.data.message || "Check-in successful!");
                     }
-                    
-                    setScanFeedback("Processing...");
-                    try {
-                        const response = await api.post(`/bookings/${bookingId}/check-in`, {
-                            qr_data: decodedText
-                        });
-                        if (response.data.success) {
-                            setIsSuccess(true);
-                            setScanFeedback(response.data.message || "Success!");
-                        }
-                    } catch (error) {
-                        setIsSuccess(false);
-                        setScanFeedback(error.response?.data?.message || "Check-in failed.");
-                    }
-                },
-                (error) => { console.warn(error); }
-            );
-        } catch (err) {
-            console.error("Scanner init failed:", err);
-            setScanFeedback("Camera failed to initialize.");
-        }
+                } catch (error) {
+                    setIsSuccess(false);
+                    const msg = error.response?.data?.message || "Check-in failed.";
+                    setScanFeedback(`Failed: ${msg}`);
+                } finally {
+                    setIsProcessing(false);
+                }
+            },
+            (error) => {
+                if (typeof error === 'string' && error.includes('NotFoundException')) return;
+            }
+        );
 
         return () => {
-            if (scannerRef.current) {
-                scannerRef.current.clear().catch(() => {});
-            }
+            if (scannerRef.current) scannerRef.current.clear().catch(() => { });
         };
-    }, [bookingId]);
+    }, [bookingId, isProcessing]);
 
     return (
-        <div className="scanner-card" style={{ padding: '20px' }}>
+        <div className="scanner-card" style={{ padding: '20px', textAlign: 'center' }}>
             <h3>Scan QR Code</h3>
-            <div id="reader-container"></div>
-            {scanFeedback && <div style={{ color: isSuccess ? 'green' : 'red' }}>{scanFeedback}</div>}
+            <div id="reader-container" style={{ width: '100%' }}></div>
+            {scanFeedback && (
+                <div style={{
+                    padding: '10px', marginTop: '10px', fontWeight: 'bold',
+                    color: isSuccess ? '#1e7e34' : '#bd2130',
+                    background: isSuccess ? '#e6ffed' : '#fff0f1'
+                }}>
+                    {scanFeedback}
+                </div>
+            )}
         </div>
     );
 }

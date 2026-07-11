@@ -80,13 +80,16 @@ class CheckInService
      */
     private function recordAttempt(Booking $booking, int $userId, Carbon $now, string $status): CheckIn
     {
-        return CheckIn::create([
-            'booking_id'   => $booking->booking_id,
-            'user_id'      => $userId,
-            'checkin_time' => $now,
-            'method'       => 'QR',
-            'status'       => $status,
-        ]);
+        // Use updateOrCreate to handle existing scan attempts for this booking
+        return CheckIn::updateOrCreate(
+            ['booking_id' => $booking->booking_id],
+            [
+                'user_id'      => $userId,
+                'checkin_time' => $now,
+                'method'       => 'QR',
+                'status'       => $status,
+            ]
+        );
     }
 
     /**

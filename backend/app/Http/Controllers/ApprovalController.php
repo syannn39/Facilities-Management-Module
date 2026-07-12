@@ -33,7 +33,7 @@ class ApprovalController extends Controller
     {
         $manager = $request->user();
 
-        $allPending = BookingRequest::with('facility.get_operational_rule', 'user')
+        $allPending = BookingRequest::with('facility.getOperationalRule', 'user')
             ->where('status', 'Pending')
             ->get();
 

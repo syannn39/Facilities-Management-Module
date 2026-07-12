@@ -149,31 +149,17 @@ const handleProcessRequest = async (status) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Instead of just doing a POST, check if we are editing
-      const rulePayload = {
-        facility_id: facilityIdToUse,
-        max_capacity: formData.capacity,
-        opening_time: '08:00:00', // adjust as needed
-        closing_time: '22:00:00',
-        advance_booking_limit: formData.advance_booking_limit,
-        approval_tier: formData.workflow_tier_id,
-        grace_period_minutes: formData.grace_period_minutes
+      // 1. Define the unifiedPayload FIRST so the API can use it
+      const unifiedPayload = {
+        name: formData.name,
+        category: formData.category,
+        status: formData.status,
+        image_url: formData.image_url,
       };
-
-      // 1. Check if the facility already HAS a rule
-      const existingRule = facility.get_operational_rule; 
-
-      if (existingRule) {
-        // UPDATE existing
-        await api.put(`/operational-rules/${existingRule.rule_id}`, rulePayload);
-      } else {
-        // CREATE new
-        await api.post('/operational-rules', rulePayload);
-      }
 
       let facilityIdToUse = editingId;
 
-      // Step 1: Hit the main Facility route
+      // 2. CREATE or UPDATE the Facility FIRST to guarantee we have an ID
       if (editingId) {
         await api.put(`/facilities/${editingId}`, unifiedPayload);
       } else {
@@ -185,35 +171,41 @@ const handleProcessRequest = async (status) => {
           response.data?.facility_id || 
           response.data?.id;
 
-        // Safety check so we know exactly if the backend hid the ID!
+        // Safety check
         if (!facilityIdToUse) {
           console.error("Backend response:", response);
           alert("Warning: Facility created, but we couldn't read the new ID from Laravel. Rules were skipped!");
+          return; // Stop here so it doesn't crash the next steps
         }
       }
 
-      // Step 2: Hit the Governance route 
-      if (facilityIdToUse) {
-        const rulesPayload = {
-          facility_id: facilityIdToUse,
-          ...unifiedPayload // Spread the exact same bulletproof data here too
-        };
-        
-        // use a try/catch here so that if Step 1 actually handled everything
-        // and Step 2 fails, it doesn't crash the whole screen.
-        try {
-          await api.post('/governance/rules', rulesPayload);
-        } catch (ruleErr) {
-          console.warn("Governance route skipped or failed, but facility saved.", ruleErr);
-        }
+      // 3. - build the rulePayload using the guaranteed facilityIdToUse
+      const rulesPayload = {
+        facility_id: facilityIdToUse,
+        max_capacity: formData.capacity,
+        opening_time: '08:00:00', // adjust as needed
+        closing_time: '22:00:00',
+        advance_booking_limit: formData.advance_booking_limit,
+        approval_tier: formData.workflow_tier_id,
+        grace_period_minutes: formData.grace_period_minutes,
+        ...unifiedPayload // Spread the facility data in case your governance route needs it
+      };
+
+      // 4. Save the rules
+      try {
+        await api.post('/governance/rules', rulesPayload);
+      } catch (ruleErr) {
+        console.warn("Governance route skipped or failed, but facility saved.", ruleErr);
       }
 
+      // 5. Clean up and refresh
       closeModal();
-      fetchFacilities(); // Refresh the list!
+      if (typeof fetchFacilities === 'function') {
+        fetchFacilities(); 
+      }
       
     } catch (err) {
       console.error("Failed to save:", err.response?.data || err);
-      // This will pop up an alert showing the EXACT backend error if it fails again
       alert(`Backend Error: ${JSON.stringify(err.response?.data?.errors || err.response?.data?.message || "Unknown error")}`);
     }
   };

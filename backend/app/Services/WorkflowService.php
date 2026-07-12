@@ -58,15 +58,25 @@ class WorkflowService
      */
     public function getNextApprover(BookingRequest $request): ?WorkflowTier
     {
+        // 1. Get the rule (might be null if the database was wiped!)
         $rule = $request->facility->getOperationalRule;
         
-        // Attempt to find specific tier
-        $tier = WorkflowTier::where('rule_id', $rule->rule_id)->first();
+        $tier = null;
         
-        // If no specific tier, return a 'Global Manager' default
-        if (!$tier) {
-            return WorkflowTier::where('assigned_role', 'Manager')->first(); 
+        // 2. Only look for a specific tier if the rule actually exists
+        if ($rule) {
+            $tier = WorkflowTier::where('rule_id', $rule->rule_id)->first();
         }
+        
+        // 3. The bulletproof fallback (Creates an in-memory manager tier)
+        if (!$tier) {
+            $defaultTier = new WorkflowTier();
+            $defaultTier->assigned_role = 'Manager';
+            $defaultTier->tier_level = 1;
+            
+            return $defaultTier; 
+        }
+        
         return $tier;
     }
 

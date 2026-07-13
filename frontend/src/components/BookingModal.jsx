@@ -242,7 +242,7 @@ const styles = {
   dot: { fontSize: 8, marginRight: 6 },
   takenLabel: { fontSize: 10.5, textDecoration: 'none', color: '#c00', fontWeight: 600 },
   textarea: {
-    width: '100%', minHeight: 200, borderRadius: 8, border: '1px solid #e1e4e8',
+    width: '100%', minHeight: 60, borderRadius: 8, border: '1px solid #e1e4e8',
     padding: 10, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
   },
   numberInput: {

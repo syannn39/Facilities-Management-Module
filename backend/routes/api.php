@@ -74,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Reports (Class Diagram Figure 4.3.2: ReportController) ──────────────────
     Route::get('/reports',              [ReportController::class, 'index']);
+    Route::get('/reports/dashboard-metrics', [ReportController::class, 'getDashboardMetrics']);
     Route::post('/reports/generate',    [ReportController::class, 'generate']);
     Route::get('/reports/{id}/pdf',     [ReportController::class, 'exportPDF']);
     Route::get('/reports/{id}/csv',     [ReportController::class, 'exportCSV']);

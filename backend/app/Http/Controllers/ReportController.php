@@ -6,6 +6,7 @@ use App\Models\Report;
 use App\Services\ReportingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 /**
  * ReportController — Class Diagram Figure 4.3.2.
@@ -62,39 +63,96 @@ class ReportController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Report generated.',
+            'file_url' => $fileUrl,
             'data'    => $report->fresh(),
         ], 201);
     }
 
     /**
      * GET /api/reports/{id}/pdf  (auth:sanctum, Manager only)
-     *
-     * exportPDF() per Class Diagram.
      */
-    public function exportPDF(int $id): JsonResponse
+    public function exportPDF(int $id)
     {
         $report = Report::findOrFail($id);
-        $fileUrl = $report->exportPDF();
-
-        return response()->json([
-            'success'  => true,
-            'file_url' => $fileUrl,
-        ]);
+        $fileUrl = $report->exportPDF(); // e.g., "reports/filename.txt"
+        
+        // Forces the browser to download the file from the secure storage folder
+        return response()->download(storage_path('app/' . $fileUrl));
     }
 
     /**
      * GET /api/reports/{id}/csv  (auth:sanctum, Manager only)
-     *
-     * exportCSV() per Class Diagram.
      */
-    public function exportCSV(int $id): JsonResponse
+    public function exportCSV(int $id)
     {
         $report = Report::findOrFail($id);
-        $fileUrl = $report->exportCSV();
+        $fileUrl = $report->exportCSV(); // e.g., "reports/filename.csv"
+
+        // Forces the browser to download the file from the secure storage folder
+        return response()->download(storage_path('app/' . $fileUrl));
+    }
+
+    /**
+     * GET /api/reports/dashboard-metrics (auth:sanctum, Manager only)
+     * Fetches live data for the React charts and stats.
+     */
+    public function getDashboardMetrics(Request $request): JsonResponse
+    {
+        // 1. Read the incoming filters from React (with safe fallbacks)
+        $dateFrom = $request->query('date_from', now()->subDays(30)->toDateString());
+        $dateTo = $request->query('date_to', now()->toDateString());
+        $facilityId = $request->query('facility_id', 'all');
+
+        // 2. Filter Facility Usage (The Bar Chart)
+        $facilitiesQuery = \App\Models\Facility::query();
+
+        if ($facilityId !== 'all') {
+            $facilitiesQuery->where('facility_id', $facilityId);
+        }
+
+        // Update this part to only return the result for the facility requested
+        $facilities = $facilitiesQuery->withCount(['bookings' => function ($query) use ($dateFrom, $dateTo) {
+            $query->whereBetween('booking_date', [$dateFrom, $dateTo]);
+        }])->get();
+
+        // CRITICAL FIX: Ensure we are mapping the specific facility name from the query
+        $chartData = $facilities->map(function ($facility) {
+            return [
+                'name' => $facility->name, // This should now correctly reflect the filtered facility
+                'bookings' => $facility->bookings_count
+            ];
+        });
+
+        // 3. Filter Overall Booking Stats (The KPI Cards)
+        $requestsQuery = \App\Models\BookingRequest::whereBetween('booking_date', [$dateFrom, $dateTo]);
+        
+        if ($facilityId !== 'all') {
+            $requestsQuery->where('facility_id', $facilityId);
+        }
+
+        $totalBookings = (clone $requestsQuery)->count();
+        $failedBookings = (clone $requestsQuery)->whereIn('status', ['Rejected', 'Cancelled'])->count();
+        $approvedBookings = (clone $requestsQuery)->where('status', 'Approved')->count();
+
+        $cancellationRate = $totalBookings > 0 
+            ? round(($failedBookings / $totalBookings) * 100, 1) 
+            : 0;
+
+        // Add this temporarily right before the return statement
+        Log::info("Filtering for facility_id: " . $facilityId);
+        Log::info("Facilities found count: " . $facilities->count());
 
         return response()->json([
-            'success'  => true,
-            'file_url' => $fileUrl,
+            'success' => true,
+            'data' => [
+                'chartData' => $chartData,
+                'stats' => [
+                    'total_requests' => $totalBookings,
+                    'approved' => $approvedBookings,
+                    'rejected_cancelled' => $failedBookings,
+                    'cancellation_rate' => $cancellationRate
+                ]
+            ]
         ]);
     }
 }

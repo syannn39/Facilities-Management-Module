@@ -38,6 +38,12 @@ export default function AdminView() {
     grace_period_minutes: 15 
   });
 
+  // --- Report State ---
+  const [reportData, setReportData] = useState([]);
+  const [dateFilter, setDateFilter] = useState('30days');
+  const [facilityFilter, setFacilityFilter] = useState('all');
+  const [reportStats, setReportStats] = useState({ total_requests: 0, cancellation_rate: 0 });
+
   // --- TAB ROUTING EFFECT ---
   useEffect(() => {
     if (activeTab === 'facilities') {
@@ -45,6 +51,8 @@ export default function AdminView() {
       fetchWorkflowTiers();
     } else if (activeTab === 'approvals') {
       fetchBookingRequests();
+    } else if (activeTab === 'reports') {
+      fetchReportData();
     }
   }, [activeTab]);
 
@@ -82,6 +90,79 @@ export default function AdminView() {
       console.error("Failed to fetch booking requests.", err);
     } finally {
       setLoadingRequests(false);
+    }
+  };
+  
+  // --- API: REPORTS ---
+  // 1. HELPER: Get the exact dates based on the dropdown choice
+  const getFilterDates = () => {
+    const end = new Date();
+    const start = new Date();
+    if (dateFilter === '30days') {
+      start.setDate(end.getDate() - 30);
+    } else if (dateFilter === 'year') {
+      start.setFullYear(end.getFullYear() - 1);
+    }
+    return {
+      date_from: start.toISOString().split('T')[0],
+      date_to: end.toISOString().split('T')[0]
+    };
+  };
+
+  // 2. DASHBOARD FETCH: Only runs on load or when "Generate Report" is clicked
+  const fetchReportData = async () => {
+    try {
+      const { date_from, date_to } = getFilterDates();
+      
+      const params = new URLSearchParams({
+        date_from: date_from,
+        date_to: date_to,
+        facility_id: facilityFilter
+      });
+
+      const response = await api.get(`/reports/dashboard-metrics?${params.toString()}`);
+      
+      setReportData(response.data.data.chartData);
+      setReportStats(response.data.data.stats);
+    } catch (err) {
+      console.error("Failed to fetch dashboard metrics:", err);
+    }
+  };
+
+  // 3. EXPORT FILE: Triggered by the PDF/CSV buttons
+  const handleExport = async (format) => {
+    try {
+      // FIX: Added this line so handleExport knows what dates to send!
+      const { date_from, date_to } = getFilterDates(); 
+
+      const payload = {
+        report_type: 'Dashboard Metrics',
+        date_from: date_from, 
+        date_to: date_to,
+        format: format
+      };
+
+      const response = await api.post('/reports/generate', payload);
+      const reportId = response.data.data.id || response.data.data.report_id;
+
+      if (!reportId) throw new Error("No Report ID returned");
+
+      const fileResponse = await api.get(`/reports/${reportId}/${format}`, {
+        responseType: 'blob'
+      });
+
+      const url = window.URL.createObjectURL(new Blob([fileResponse.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Facility_Report_${reportId}.${format}`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      console.error(`Failed to export ${format}:`, err);
+      alert(`Error exporting ${format.toUpperCase()}`);
     }
   };
 
@@ -719,45 +800,86 @@ const handleProcessRequest = async (status) => {
             {/* Header & Controls */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h2 style={styles.title}>Facility Usage Reports</h2>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button style={{...styles.reviewBtn, backgroundColor: '#333', color: 'white'}}>Generate Report</button>
-                <button style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}>⬇ Export PDF</button>
-                <button style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}>⬇ Export CSV</button>
-              </div>
+              <div style={{ display: 'flex', gap: '10px' }}></div>
             </div>
 
             {/* Filter Bar */}
             <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-              <select style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}>
-                <option>All Facilities</option>
-                <option>Multi-Purpose Hall</option>
-                <option>BBQ Pit</option>
+              
+              {/* Facility Filter */}
+              <select 
+                value={facilityFilter} 
+                onChange={(e) => setFacilityFilter(e.target.value)} 
+                style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}
+              >
+                <option value="all">All Facilities</option>
+                
+                {/* Fixed: using facility_id to ensure a number is sent to Laravel */}
+                {facilities && facilities.map((facility) => (
+                  <option 
+                    key={facility.facility_id || facility.id} 
+                    value={facility.facility_id || facility.id}
+                  >
+                    {facility.name}
+                  </option>
+                ))}
               </select>
-              <select style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}>
-                <option>Last 30 Days</option>
-                <option>This Year</option>
+
+              {/* Date Filter */}
+              <select 
+                value={dateFilter} 
+                onChange={(e) => setDateFilter(e.target.value)} 
+                style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}
+              >
+                <option value="30days">Last 30 Days</option>
+                <option value="year">This Year</option>
               </select>
+
+              <button onClick={() => fetchReportData()}
+                  style={{...styles.reviewBtn, backgroundColor: '#333', color: 'white'}}>
+                  Generate Report
+                </button>
+                
+                {/* Wire up the PDF button */}
+                <button 
+                  onClick={() => handleExport('pdf')} 
+                  style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}
+                >
+                  ⬇ Export PDF
+                </button>
+                
+                {/* Wire up the CSV button */}
+                <button 
+                  onClick={() => handleExport('csv')} 
+                  style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}
+                >
+                  ⬇ Export CSV
+                </button>
+              
             </div>
 
             {/* KPI Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '24px' }}>
-              {/* Card 1 */}
+              {/* Card 1: Total Bookings */}
               <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Total Bookings</p>
-                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>226</h3>
-                <p style={{ margin: 0, color: '#10b981', fontSize: '12px', fontWeight: 'bold' }}>↑ +12% from last month</p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Total Booking Requests</p>
+                {/* Dynamically pull total_requests, default to 0 if undefined */}
+                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>{reportStats?.total_requests || 0}</h3>
+                <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>Lifetime requests</p>
               </div>
-              {/* Card 2 */}
+              
+              {/* Card 2: Cancellation Rate */}
               <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Cancellation Rate</p>
-                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>8.5%</h3>
-                <p style={{ margin: 0, color: '#ef4444', fontSize: '12px', fontWeight: 'bold' }}>↑ +2% from last month</p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Rejection & Cancellation Rate</p>
+                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>{reportStats?.cancellation_rate || 0}%</h3>
+                <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>Of total requests</p>
               </div>
-              {/* Card 3 */}
+              
+              {/* Card 3: Rejected / Cancelled */}
               <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Auto-Cancelled No-Shows</p>
-                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>12</h3>
-                <p style={{ margin: 0, color: '#10b981', fontSize: '12px', fontWeight: 'bold' }}>↓ -3 from last month</p>
+                <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Rejected / Cancelled</p>
+                <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>{reportStats?.rejected_cancelled || 0}</h3>
+                <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>Total failed requests</p>
               </div>
             </div>
 
@@ -765,31 +887,28 @@ const handleProcessRequest = async (status) => {
             <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
               <h4 style={{ margin: '0 0 20px 0', color: '#333' }}>Booking Frequency by Facility</h4>
               <div style={{ width: '100%', height: 350 }}>
-                <ResponsiveContainer>
-                  <BarChart data={[
-                    { name: 'Tennis Court', bookings: 45 },
-                    { name: 'BBQ Pit', bookings: 32 },
-                    { name: 'Multi-Purpose Hall', bookings: 28 },
-                    { name: 'Gym', bookings: 68 },
-                    { name: 'Swimming Pool', bookings: 54 },
-                  ]}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                    <XAxis dataKey="name" tick={{fill: '#666'}} axisLine={{stroke: '#ccc'}} tickLine={false} />
-                    <YAxis tick={{fill: '#666'}} axisLine={false} tickLine={false} />
-                    <Tooltip 
-                      cursor={{fill: '#f9fafb'}}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-                    />
-                    <Bar dataKey="bookings" radius={[4, 4, 0, 0]}>
-                      {/* Optional: Add custom colors to the bars here if desired */}
-                      <Cell fill="#3b82f6" /> 
-                      <Cell fill="#3b82f6" />
-                      <Cell fill="#3b82f6" />
-                      <Cell fill="#3b82f6" />
-                      <Cell fill="#3b82f6" />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                {reportData && reportData.length > 0 ? (
+                  <ResponsiveContainer>
+                    <BarChart data={reportData}> {/* 1. Connect the real data here! */}
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                      <XAxis dataKey="name" tick={{fill: '#666'}} axisLine={{stroke: '#ccc'}} tickLine={false} />
+                      <YAxis tick={{fill: '#666'}} axisLine={false} tickLine={false} />
+                      <Tooltip 
+                        cursor={{fill: '#f9fafb'}}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                      />
+                      {/* 2. Apply the color directly to the Bar so it dynamically scales */}
+                      <Bar dataKey="bookings" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  /*<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: '#666' }}>
+                    Loading chart data...
+                  </div>*/
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  No booking data found for the selected filters.
+                </div>
+                )}
               </div>
             </div>
           </div>

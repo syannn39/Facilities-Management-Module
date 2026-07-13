@@ -7,6 +7,7 @@ use App\Models\Booking;
 use App\Models\BookingRequest;
 use App\Models\Report;
 use Carbon\Carbon;
+use Barryvdh\DomPDF\Facade\Pdf; 
 
 /**
  * ReportingService — Class Diagram Figure 4.3.3.
@@ -90,7 +91,7 @@ class ReportingService
                 ->first();
 
             if ($lastLog) {
-                $turnarounds[] = $request->created_at->diffInHours($lastLog->actioned_at);
+                $turnarounds[] = Carbon::parse($request->created_at)->diffInHours(Carbon::parse($lastLog->actioned_at));
             }
         }
 
@@ -146,21 +147,17 @@ class ReportingService
      */
     public function formatPDF(array $reportData, string $filename): string
     {
-        $path = storage_path("app/reports/{$filename}.txt");
+        // Notice we changed .txt to .pdf here!
+        $path = storage_path("app/reports/{$filename}.pdf"); 
+        
         if (!is_dir(dirname($path))) {
             mkdir(dirname($path), 0775, true);
         }
 
-        $lines = ["Facility Usage Report ({$reportData['date_from']} to {$reportData['date_to']})", ''];
-        foreach ($reportData['booking_frequency'] as $row) {
-            $lines[] = "{$row['facility_name']}: {$row['count']} bookings";
-        }
-        $lines[] = '';
-        $lines[] = "Cancellation Rate: {$reportData['cancellation_rate']}";
-        $lines[] = "Avg Approval Turnaround: {$reportData['approval_turnaround_hours']} hours";
+        // Pass the data into your new Blade template and save it
+        $pdf = Pdf::loadView('reports.pdf', ['reportData' => $reportData]);
+        $pdf->save($path);
 
-        file_put_contents($path, implode("\n", $lines));
-
-        return "reports/{$filename}.txt";
+        return "reports/{$filename}.pdf";
     }
 }

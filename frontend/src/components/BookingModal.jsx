@@ -113,8 +113,8 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                           ...(!slot.available ? styles.slotBtnTaken : {}),
                         }}
                       >
-                        {isSelected && <span style={styles.dot}>●</span>}
                         {slot.start} - {slot.end}
+                        {isSelected && <span style={styles.dot}>●</span>}
                         {!slot.available && <span style={styles.takenLabel}>Booked</span>}
                       </button>
                     );
@@ -122,23 +122,27 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                 </div>
 
                 {requiresApproval && (
-                  <>
-                    <p style={{ ...styles.sectionLabel, marginTop: 14 }}>Purpose of Use</p>
-                    <textarea
-                      value={purpose}
-                      onChange={(e) => setPurpose(e.target.value)}
-                      placeholder="Describe the purpose of your booking..."
-                      style={styles.textarea}
-                    />
-                    <p style={{ ...styles.sectionLabel, marginTop: 10 }}>Expected Guest Count</p>
-                    <input
-                      type="number"
-                      min={1}
-                      value={guestCount}
-                      onChange={(e) => setGuestCount(parseInt(e.target.value, 10) || 1)}
-                      style={styles.numberInput}
-                    />
-                  </>
+                  <div style={styles.purposeRow}>
+                    <div style={styles.purposeCol}>
+                      <p style={styles.sectionLabel}>Purpose of Use</p>
+                      <textarea
+                        value={purpose}
+                        onChange={(e) => setPurpose(e.target.value)}
+                        placeholder="Describe the purpose of your booking..."
+                        style={styles.textarea}
+                      />
+                    </div>
+                    <div style={styles.guestCol}>
+                      <p style={styles.sectionLabel}>Expected Guest Count</p>
+                      <input
+                        type="number"
+                        min={1}
+                        value={guestCount}
+                        onChange={(e) => setGuestCount(parseInt(e.target.value, 10) || 1)}
+                        style={styles.numberInput}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -206,32 +210,39 @@ const styles = {
   },
   modal: {
     background: '#fff', borderRadius: 12, padding: 24,
-    width: 520, maxWidth: '92vw', maxHeight: '88vh', overflowY: 'auto',
+    width: 500, maxWidth: '94vw', maxHeight: '88vh', overflowY: 'auto',
     fontFamily: 'system-ui, Arial, sans-serif',
   },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   title: { margin: 0, fontSize: 17, color: '#1a1a2e' },
   subtitle: { margin: '4px 0 0', fontSize: 12.5, color: '#888' },
   closeBtn: { border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#999', lineHeight: 1 },
-  bodyRow: { display: 'flex', gap: 24, flexWrap: 'wrap' },
+  // Widths here are deliberate: 230 (Calendar's fixed width) + 20 (gap) + 200
+  // (slotColumn's floor) = 450, comfortably under modal's 620 - 48 padding =
+  // 572 usable px. Keep this margin — it's what stops the two columns from
+  // flex-wrapping onto separate lines (which is what silently turns the
+  // side-by-side layout into a stacked one if the numbers get too tight).
+  bodyRow: { display: 'flex', gap: 20, flexWrap: 'wrap' },
   sectionLabel: { fontSize: 12.5, fontWeight: 600, color: '#444', margin: '0 0 8px' },
-  slotColumn: { flex: 1, minWidth: 220 },
+  slotColumn: { flex: 1, minWidth: 200 },
+  purposeCol: { flex: 2, minWidth: 200, marginTop: 20 },
+  guestCol: { flex: 3, minWidth: 80, marginTop: 20},
   slotList: {
-    display: 'flex', flexDirection: 'column', gap: 6,
-    maxHeight: 200, overflowY: 'auto', paddingRight: 4,
+    display: 'flex', flexDirection: 'column',
+    maxHeight: 220, overflowY: 'auto', paddingRight: 4,
   },
   slotBtn: {
-    textAlign: 'left', padding: '8px 12px', borderRadius: 8,
-    border: '1px solid #e1e4e8', background: '#fff', cursor: 'pointer',
-    fontSize: 13.5, color: '#222', fontFamily: 'inherit',
+    textAlign: 'left', padding: '10px 18px', borderRadius: 6,
+    border: 'none', borderBottom: '1px solid #f1f1f4', background: 'transparent', cursor: 'pointer',
+    fontSize: 14, color: '#222', fontFamily: 'inherit',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
   },
-  slotBtnSelected: { border: '1.5px solid #1a1a2e', background: '#f5f5fa', fontWeight: 600 },
-  slotBtnTaken: { color: '#bbb', textDecoration: 'line-through', cursor: 'not-allowed', background: '#fafafa' },
+  slotBtnSelected: { background: '#f5f5fa', fontWeight: 700, color: '#1a1a2e' },
+  slotBtnTaken: { color: '#bbb', textDecoration: 'line-through', cursor: 'not-allowed', background: 'transparent' },
   dot: { fontSize: 8, marginRight: 6 },
   takenLabel: { fontSize: 10.5, textDecoration: 'none', color: '#c00', fontWeight: 600 },
   textarea: {
-    width: '100%', minHeight: 60, borderRadius: 8, border: '1px solid #e1e4e8',
+    width: '100%', minHeight: 200, borderRadius: 8, border: '1px solid #e1e4e8',
     padding: 10, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',
   },
   numberInput: {
@@ -248,7 +259,7 @@ const styles = {
     padding: '9px 18px', borderRadius: 8, border: 'none',
     background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
   },
-  primaryBtnDisabled: { background: '#ccc', cursor: 'not-allowed' },
+  primaryBtnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
   confirmText: { fontSize: 13.5, color: '#555', lineHeight: 1.5 },
   summaryBox: { background: '#eef2ff', borderRadius: 10, padding: 14, marginTop: 14 },
   summaryTitle: { margin: '0 0 6px', fontSize: 13, fontWeight: 700, color: '#1a1a2e' },

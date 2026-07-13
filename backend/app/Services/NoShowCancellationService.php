@@ -23,12 +23,20 @@ class NoShowCancellationService
      * Confirmed booking, cancel it, notify the resident. This is what
      * App\Console\Commands\DetectNoShows actually calls now.
      */
+
     public function handle(): int
     {
         $cancelled = 0;
+        $now = now();
 
         foreach ($this->getExpiredBookings() as $booking) {
-            if ($this->cancelBooking($booking)) {
+            if ($booking->cancel()) {
+
+                $user = $booking->user;
+                $user->update([
+                    'penalty_until' => $now->copy()->addDays(3)
+                ]);
+
                 $this->triggerNotification($booking);
                 $cancelled++;
             }

@@ -37,6 +37,11 @@ class SchedulingService
      */
     public function validateAndCreateBooking(array $data, int $userId): array
     {
+        $user = \App\Models\User::find($userId);
+        if ($user && $user->penalty_until && Carbon::now()->lessThan($user->penalty_until)) {
+            throw new Exception("You are currently under a 3-day booking ban due to a previous no-show.");
+        }
+        
         $facility = Facility::with('getOperationalRule')->findOrFail($data['facility_id']);
         $startTime = Carbon::parse($data['start_time']);
         $endTime = Carbon::parse($data['end_time']);
@@ -136,7 +141,7 @@ class SchedulingService
             ->whereIn('status', ['Pending', 'Approved'])
             ->where(function ($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
-                      ->where('end_time', '>', $startTime);
+                    ->where('end_time', '>', $startTime);
             })->exists();
 
         if ($hasConflict) {

@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // attempt (calling a method that no longer exists). Fixed here.
     Route::post('/bookings/{id}/check-in', [CheckInController::class, 'store']);
     Route::get('/check-ins/{booking_id}',  [CheckInController::class, 'show']);
+    Route::post('/bookings/{id}/cancel', [BookingController::class, 'cancel']);
 
     // ── Approvals (Class Diagram Figure 4.3.2: ApprovalController) ──────────────
     Route::get('/approvals/pending',           [ApprovalController::class, 'getPendingRequests']);

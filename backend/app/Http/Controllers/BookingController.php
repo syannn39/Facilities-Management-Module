@@ -103,25 +103,9 @@ class BookingController extends Controller
             ->where('booking_id', $bookingId)
             ->firstOrFail();
 
-        $gracePeriod = $booking->facility->getOperationalRule->grace_period_minutes ?? 15;
-        $deadline = $booking->start_time->copy()->addMinutes($gracePeriod);
-
-        if (now()->greaterThan($booking->start_time)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cancellation is not allowed after the booking start time.'
-            ], 403);
-        }
-
-        // Logic: Only allow cancellation if not yet Checked_In
-        if ($booking->status === 'Checked_In') {
-            return response()->json(['success' => false, 'message' => 'Cannot cancel a checked-in booking.'], 400);
-        }
-
-        if ($booking->cancel()) {
+        if ($booking->cancel(true)) {
             return response()->json(['success' => true, 'message' => 'Booking cancelled successfully.']);
         }
-        $booking->update(['status' => 'Cancelled_By_User']);
 
         return response()->json(['success' => false, 'message' => 'Cancellation failed.'], 400);
     }

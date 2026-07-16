@@ -30,8 +30,9 @@ class NoShowCancellationService
         $now = now();
 
         foreach ($this->getExpiredBookings() as $booking) {
-            if ($booking->cancel()) {
-
+           
+            if ($booking->cancel(false)) {// false = not by user
+                // System auto-cancel (No-Show)
                 $user = $booking->user;
                 $user->update([
                     'penalty_until' => $now->copy()->addDays(3)

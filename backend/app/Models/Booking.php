@@ -100,12 +100,14 @@ class Booking extends Model
      * 'Cancelled_By_User') added to both this column and StateMachineService's
      * transition table.
      */
-    public function cancel(): bool
+    public function cancel(bool $byUser = false): bool
     {
         if ($this->status === 'Checked_In') {
             return false;
         }
-
-        return app(\App\Services\StateMachineService::class)->transition($this, 'Cancelled_No_Show');
+        
+        // Explicitly set the status based on who is calling
+        $status = $byUser ? 'Cancelled_By_User' : 'Cancelled_No_Show';
+        return app(\App\Services\StateMachineService::class)->transition($this,$status);
     }
 }

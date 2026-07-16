@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Booking;
+use Illuminate\Support\Facades\Log;
 
 /**
  * StateMachineService — Class Diagram Figure 4.3.3.
@@ -26,9 +27,10 @@ class StateMachineService
      * starting point for the two ways a booking's lifecycle can end.
      */
     private array $validTransitions = [
-        'Confirmed'         => ['Confirmed', 'Checked_In', 'Cancelled_No_Show'],
-        'Checked_In'        => ['Checked_In'], // terminal — can't leave Checked_In
-        'Cancelled_No_Show' => ['Cancelled_No_Show'], // terminal — can't leave Cancelled_No_Show
+        'Confirmed'         => ['Confirmed', 'Checked_In', 'Cancelled_No_Show', 'Cancelled_By_User'],
+        'Checked_In'        => ['Checked_In'],
+        'Cancelled_No_Show' => ['Cancelled_No_Show'],
+        'Cancelled_By_User' => ['Cancelled_By_User'],
     ];
 
     /**
@@ -44,8 +46,21 @@ class StateMachineService
         }
 
         $booking->update(['status' => $newState]);
+    
 
-        return true;
+        // Release slot for ANY cancellation
+        if (in_array($newState, ['Cancelled_No_Show', 'Cancelled_By_User'])) {
+
+        // Accessing as a property triggers the relationship query
+        $schedule = $booking->getSchedule; 
+        
+        // Only call releaseSlot() if it actually exists
+        if ($schedule !== null) {
+            $schedule->releaseSlot();
+        }
+    }
+    return true;
+
     }
 
     public function isValidTransition(string $fromState, string $toState): bool

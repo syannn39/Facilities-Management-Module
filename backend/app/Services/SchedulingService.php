@@ -133,6 +133,11 @@ class SchedulingService
      * BookingRequest since that's the row that exists from the very first
      * moment a slot is claimed, before any Booking exists yet.
      *
+     * NOTE: this is also why cancelling a Booking MUST flip its
+     * BookingRequest.status off 'Approved' too (see
+     * StateMachineService::transition()) — this query has no idea Booking
+     * even has a status column.
+     *
      * @throws Exception
      */
     private function assertNoConflict(int $facilityId, Carbon $startTime, Carbon $endTime): void
@@ -155,11 +160,17 @@ class SchedulingService
      * taken — powers the "Available Time Slots" list in the booking modal
      * (only slots with available=true are selectable on the frontend).
      *
-     * A slot is unavailable if EITHER:
+     * A slot is unavailable if ANY of:
      *   - it overlaps an existing BookingRequest in Pending/Approved state
      *     (same rule as assertNoConflict above), OR
      *   - it overlaps an admin-set Availability block (is_blocked=true) —
-     *     e.g. "Gym closed for maintenance 09:00-12:00"
+     *     e.g. "Gym closed for maintenance 09:00-12:00", OR
+     *   - it has already started relative to the current moment (a past
+     *     slot on today's date) — without this, picking today in the
+     *     calendar showed every slot as selectable even ones hours in the
+     *     past, and the only thing stopping the actual submit was
+     *     BookingController's `start_time after:now` validation kicking
+     *     in AFTER the user had already picked it and hit Submit.
      *
      * Slot length is a fixed 2 hours (matches the reference design's
      * screenshots; not an admin-configurable field, per earlier decision).
@@ -177,6 +188,7 @@ class SchedulingService
 
         $dayStart = Carbon::parse("{$date} {$openTime}");
         $dayEnd   = Carbon::parse("{$date} {$closeTime}");
+        $now      = Carbon::now();
 
         $existingRequests = BookingRequest::where('facility_id', $facilityId)
             ->whereIn('status', ['Pending', 'Approved'])
@@ -205,10 +217,16 @@ class SchedulingService
                 return $slotStart->lessThan($blockEnd) && $slotEnd->greaterThan($blockStart);
             });
 
+            // A slot that has already started (or already ended) as of
+            // right now can never be legally booked — mirrors
+            // BookingController's `start_time => after:now` rule, just
+            // applied here too so the UI never offers it in the first place.
+            $isPast = $slotStart->lessThan($now);
+
             $slots[] = [
                 'start'     => $slotStart->format('H:i'),
                 'end'       => $slotEnd->format('H:i'),
-                'available' => !$overlapsRequest && !$overlapsBlock,
+                'available' => !$overlapsRequest && !$overlapsBlock && !$isPast,
             ];
 
             $slotStart = $slotEnd;

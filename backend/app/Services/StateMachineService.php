@@ -46,21 +46,32 @@ class StateMachineService
         }
 
         $booking->update(['status' => $newState]);
-    
 
         // Release slot for ANY cancellation
         if (in_array($newState, ['Cancelled_No_Show', 'Cancelled_By_User'])) {
 
-        // Accessing as a property triggers the relationship query
-        $schedule = $booking->getSchedule; 
-        
-        // Only call releaseSlot() if it actually exists
-        if ($schedule !== null) {
-            $schedule->releaseSlot();
-        }
-    }
-    return true;
+            // Accessing as a property triggers the relationship query
+            $schedule = $booking->getSchedule;
 
+            // Only call releaseSlot() if it actually exists
+            if ($schedule !== null) {
+                $schedule->releaseSlot();
+            }
+
+            // BookingRequest.status IN ('Pending','Approved') — they never
+            // look at Booking.status or Schedule.is_available at all. So
+            // without this, cancelling a Booking left its originating
+            // BookingRequest sitting at 'Approved' forever, and the slot
+            // stayed permanently blocked even though the Booking itself
+            // correctly showed Cancelled_No_Show / Cancelled_By_User. This
+            // is what actually frees the slot for rebooking.
+            $bookingRequest = $booking->bookingRequest;
+            if ($bookingRequest !== null && $bookingRequest->status !== 'Cancelled') {
+                $bookingRequest->update(['status' => 'Cancelled']);
+            }
+        }
+
+        return true;
     }
 
     public function isValidTransition(string $fromState, string $toState): bool

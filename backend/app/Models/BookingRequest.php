@@ -7,10 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Traits\HasLocalJsonDates; 
 
 class BookingRequest extends Model
 {
     use BelongsToTenant; // Enforces Automated Tenant Isolation
+    use HasLocalJsonDates; 
 
     protected $primaryKey = 'request_id';
     public $timestamps = false; // ERD lists only created_at for this table
@@ -87,4 +89,5 @@ class BookingRequest extends Model
 
         return $this->update(['status' => $status]);
     }
+
 }

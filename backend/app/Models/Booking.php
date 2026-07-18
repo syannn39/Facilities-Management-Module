@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\BelongsToTenant;
+use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -11,6 +12,7 @@ use Exception;
 class Booking extends Model
 {
     use BelongsToTenant; // Enforces Automated Tenant Isolation
+    use HasLocalJsonDates; // Stops start_time/end_time from serializing to JSON as UTC (see trait docblock)
 
     protected $primaryKey = 'booking_id';
     public $timestamps = false; // Class Diagram lists only created_at for this table

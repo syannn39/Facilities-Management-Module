@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalJsonDates;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,11 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory;
+    // No $timestamps = false override here, so Eloquent auto-manages
+    // created_at/updated_at as real Carbon instances too — same UTC
+    // serialization issue as email_verified_at/penalty_until below, so
+    // this trait covers all four, not just the two explicit casts.
+    use HasLocalJsonDates;
 
     // Notifiable removed: the app has its own Notification entity
     // (notifications table, see Notification.php) which it writes to

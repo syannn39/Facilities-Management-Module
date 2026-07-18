@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ApprovalLog extends Model
 {
+    use HasLocalJsonDates; // actioned_at is a real datetime cast below
+
     protected $primaryKey = 'log_id';
     public $timestamps = false;
     const UPDATED_AT = null;

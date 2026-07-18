@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -10,6 +11,7 @@ class CheckIn extends Model
     // NOT using BelongsToTenant — the ERD has no tenant_id on this table
     // either (scoped through booking_id -> Booking -> tenant_id instead).
     // Same reasoning as OperationalRule above.
+    use HasLocalJsonDates; // checkin_time is a real datetime cast below — same UTC-serialization fix as Booking/BookingRequest
 
     protected $primaryKey = 'checkin_id';
     public $timestamps = false;

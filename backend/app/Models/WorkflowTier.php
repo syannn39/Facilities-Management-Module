@@ -2,11 +2,17 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WorkflowTier extends Model
 {
+    // No $timestamps = false here, so created_at/updated_at are
+    // auto-managed Carbon instances too — same UTC serialization fix as
+    // everywhere else.
+    use HasLocalJsonDates;
+
     protected $primaryKey = 'tier_id';
 
     protected $fillable = [

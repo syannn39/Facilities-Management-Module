@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Report extends Model
 {
+    use HasLocalJsonDates; // generated_at/date_from/date_to are real date(time) casts below
+
     protected $primaryKey = 'report_id';
     public $timestamps = false;
     const CREATED_AT = null;

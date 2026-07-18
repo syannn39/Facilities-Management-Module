@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Notification extends Model
 {
+    use HasLocalJsonDates; // sent_at is a real datetime cast below
+
     protected $primaryKey = 'notification_id';
     public $timestamps = false;
     const CREATED_AT = null;

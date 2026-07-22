@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Exception;
 use Illuminate\Support\Facades\Log;
+use App\Models\ApprovalLog;
 
 /**
  * ApprovalController — Class Diagram Figure 4.3.2.
@@ -63,7 +64,20 @@ class ApprovalController extends Controller
         $bookingRequest = BookingRequest::findOrFail($request_id);
 
         try {
+            // 1. Identify the current workflow tier
+            $tier = $this->workflowService->getNextApprover($bookingRequest);
+            $tierLevel = $tier ? $tier->tier_level : 1;
+
+            // 2. Update status
             $bookingRequest->update(['status' => 'Approved']);
+            
+            // 3. Explicitly write to the approval_logs table
+            ApprovalLog::logAction(
+                $bookingRequest->request_id,
+                $request->user()->id,
+                $tierLevel,
+                'Approved'
+            );
             
             $this->workflowService->processApproval($bookingRequest, $request->user());
 
@@ -92,6 +106,19 @@ class ApprovalController extends Controller
         $bookingRequest = BookingRequest::findOrFail($request_id);
 
         try {
+            // 1. Identify the current workflow tier
+            $tier = $this->workflowService->getNextApprover($bookingRequest);
+            $tierLevel = $tier ? $tier->tier_level : 1;
+
+            // 2. Explicitly write to the approval_logs table
+            ApprovalLog::logAction(
+                $bookingRequest->request_id,
+                $request->user()->id,
+                $tierLevel,
+                'Rejected',
+                $validated['remarks']
+            );
+
             $this->workflowService->processRejection($bookingRequest, $request->user(), $validated['remarks']);
 
             return response()->json([

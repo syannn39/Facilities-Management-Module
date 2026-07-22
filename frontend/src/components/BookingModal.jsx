@@ -34,6 +34,45 @@ export default function BookingModal({ facility, onClose, onBooked }) {
   const [guestCount, setGuestCount] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [maintenanceBlocks, setMaintenanceBlocks] = useState([]);
+
+  // Fetch maintenance blocks for this facility and selected date
+  useEffect(() => {
+    // 1. Pass the date parameter to Laravel
+    api.get('/availabilities', { 
+      params: { 
+        facility_id: facility.facility_id,
+        date: selectedDate 
+      } 
+    })
+      .then(res => setMaintenanceBlocks(res.data.data || []))
+      .catch(err => console.error("Failed to load maintenance blocks", err));
+      
+  }, [facility.facility_id, selectedDate]); // 2. Add selectedDate so it re-runs when clicking a new day
+
+  // helper function (Timezone & String-safe)
+  const isMaintenanceSlot = (slotStart, slotEnd) => {
+    return maintenanceBlocks.some(block => {
+      // 1. Safe blocked check: Assume it's blocked unless it is EXPLICITLY 0 or false.
+      // (This fixes it if the new form saved them as undefined/null)
+      if (block.is_blocked === false || block.is_blocked === 0) return false;
+
+      // 2. Safe Date Check: Replace space with 'T' (fixes cross-browser 'Invalid Date' bugs)
+      const safeString = block.date.includes(' ') ? block.date.replace(' ', 'T') : block.date;
+      const safeBlockDate = toLocalDateKey(new Date(safeString));
+      if (safeBlockDate !== selectedDate) return false;
+      
+      // 3. Time Math: Convert strings like "08:00" or "8:00" into raw minutes (e.g. 480)
+      const toMinutes = (timeStr) => {
+        const [h, m] = timeStr.split(':').map(Number);
+        return (h * 60) + (m || 0);
+      };
+      
+      // 4. Overlap Check using raw numbers (impossible to fail)
+      return toMinutes(slotStart) < toMinutes(block.end_time) && 
+             toMinutes(slotEnd) > toMinutes(block.start_time);
+    });
+  };
 
   useEffect(() => {
     setSlotsLoading(true);
@@ -101,6 +140,8 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                   )}
                   {!slotsLoading && slots.map((slot) => {
                     const isSelected = selectedSlot?.start === slot.start;
+                    const isMaintenance = !slot.available && isMaintenanceSlot(slot.start, slot.end);
+
                     return (
                       <button
                         key={slot.start}
@@ -115,7 +156,11 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                       >
                         {slot.start} - {slot.end}
                         {isSelected && <span style={styles.dot}>●</span>}
-                        {!slot.available && <span style={styles.takenLabel}>Booked</span>}
+                        {!slot.available && (
+                          <span style={isMaintenance ? styles.maintenanceLabel : styles.takenLabel}>
+                            {isMaintenance ? 'Maintenance' : 'Booked'}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -241,6 +286,7 @@ const styles = {
   slotBtnTaken: { color: '#bbb', textDecoration: 'line-through', cursor: 'not-allowed', background: 'transparent' },
   dot: { fontSize: 8, marginRight: 6 },
   takenLabel: { fontSize: 10.5, textDecoration: 'none', color: '#c00', fontWeight: 600 },
+  maintenanceLabel: { fontSize: 10.5, textDecoration: 'none', color: '#ef6c00', fontWeight: 600 },
   textarea: {
     width: '100%', minHeight: 60, borderRadius: 8, border: '1px solid #e1e4e8',
     padding: 10, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',

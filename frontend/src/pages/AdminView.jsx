@@ -315,7 +315,8 @@ const handleProcessRequest = async (status) => {
         date: maintenanceData.date,
         start_time: maintenanceData.start_time,
         end_time: maintenanceData.end_time,
-        reason: maintenanceData.reason
+        reason: maintenanceData.reason,
+        is_blocked: true 
       });
       alert('Maintenance block successfully scheduled!');
       setMaintenanceFacility(null);

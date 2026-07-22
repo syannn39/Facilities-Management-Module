@@ -18,10 +18,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        \App\Models\WorkflowTier::insert([
-        ['name' => 'Manager', 'level' => 1], // Adjust column names to match schema
-        ]);
-
         // ── Tenant 1: Residential (Apartment / Condo) ───────────────────────
         $residentialFacilities = $this->createTenantWithFacilities(
             tenantName: 'Sunrise Residences',
@@ -46,15 +42,6 @@ class DatabaseSeeder extends Seeder
         // (no-show), Pending (awaiting manager approval), and Rejected.
         $resident = User::where('email', 'resident@test.com')->first();
         $this->seedSampleBookings($resident, $residentialFacilities);
-
-        // ── Block the Gym for Maintenance ────────────────────────────────────
-        Availability::create([
-            'facility_id' => $residentialFacilities['Gym']->facility_id,
-            'date'        => Carbon::now()->addDays(3)->toDateString(),
-            'start_time'  => '08:00:00',
-            'end_time'    => '12:00:00',
-            'is_blocked'  => true,
-        ]);
 
         // ── Tenant 2: School (Campus) ────────────────────────────────────────
         $this->createTenantWithFacilities(
@@ -125,7 +112,8 @@ class DatabaseSeeder extends Seeder
             $facility->tenant_id = $tenant->tenant_id;
             $facility->save();
 
-            OperationalRule::create([
+            // Capture the rule in a variable so we can extract its rule_id
+            $rule = OperationalRule::create([
                 'facility_id'            => $facility->facility_id,
                 'max_capacity'           => $def['max_capacity'],
                 'approval_tier'          => $def['approval_tier'],
@@ -134,6 +122,15 @@ class DatabaseSeeder extends Seeder
                 'advance_booking_limit'  => 30,
                 'grace_period_minutes'   => 15, 
             ]);
+
+            // Check if it needs manager approval
+            if ($def['approval_tier'] > 0) {
+                \App\Models\WorkflowTier::create([
+                    'rule_id'       => $rule->rule_id, // Links to the rule above
+                    'tier_level'    => 1,
+                    'assigned_role' => 'Manager'
+                ]);
+            }
 
             $createdFacilities[$def['name']] = $facility;
         }

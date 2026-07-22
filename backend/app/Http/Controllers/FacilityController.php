@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Facility;
+use App\Models\Availability;
 use App\Services\SchedulingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -198,6 +199,31 @@ class FacilityController extends Controller
                 'message' => $e->getMessage(),
             ], 404);
         }
+    }
+
+    public function blockFacility(Request $request)
+    {
+        // 1. Validate the incoming request from React
+        $validated = $request->validate([
+            'facility_id' => 'required|exists:facilities,facility_id',
+            'date'        => 'required|date',
+            'start_time'  => 'required|date_format:H:i',
+            'end_time'    => 'required|date_format:H:i|after:start_time',
+        ]);
+
+        // 2. Create the maintenance block
+        $block = Availability::create([
+            'facility_id' => $validated['facility_id'],
+            'date'        => $validated['date'],
+            'start_time'  => $validated['start_time'],
+            'end_time'    => $validated['end_time'],
+            'is_blocked'  => true, // Hardcoded to true for maintenance
+        ]);
+
+        return response()->json([
+            'message' => 'Facility blocked for maintenance successfully.',
+            'data'    => $block
+        ], 201);
     }
 
     /**

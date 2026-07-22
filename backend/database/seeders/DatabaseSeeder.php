@@ -10,6 +10,7 @@ use App\Models\OperationalRule;
 use App\Models\Schedule;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Availability;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -17,6 +18,10 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        \App\Models\WorkflowTier::insert([
+        ['name' => 'Manager', 'level' => 1], // Adjust column names to match schema
+        ]);
+
         // ── Tenant 1: Residential (Apartment / Condo) ───────────────────────
         $residentialFacilities = $this->createTenantWithFacilities(
             tenantName: 'Sunrise Residences',
@@ -40,6 +45,15 @@ class DatabaseSeeder extends Seeder
         // (no-show), Pending (awaiting manager approval), and Rejected.
         $resident = User::where('email', 'resident@test.com')->first();
         $this->seedSampleBookings($resident, $residentialFacilities);
+
+        // ── Block the Gym for Maintenance ────────────────────────────────────
+        Availability::create([
+            'facility_id' => $residentialFacilities['Gym']->facility_id,
+            'date'        => Carbon::now()->addDays(3)->toDateString(),
+            'start_time'  => '08:00:00',
+            'end_time'    => '12:00:00',
+            'is_blocked'  => true,
+        ]);
 
         // ── Tenant 2: School (Campus) ────────────────────────────────────────
         $this->createTenantWithFacilities(

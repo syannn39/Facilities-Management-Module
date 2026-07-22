@@ -6,7 +6,9 @@ import api from '../api';
 
 export default function AdminView() {
   // --- LAYOUT & TABS STATE ---
-  const [activeTab, setActiveTab] = useState('facilities');
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('admin_active_tab') || 'facilities';
+  });
 
   // --- FACILITIES STATE ---
   const [facilities, setFacilities] = useState([]);
@@ -60,6 +62,11 @@ export default function AdminView() {
     } else if (activeTab === 'reports') {
       fetchReportData();
     }
+  }, [activeTab]);
+
+  // --- PERSIST TAB ON REFRESH ---
+  useEffect(() => {
+    localStorage.setItem('admin_active_tab', activeTab);
   }, [activeTab]);
 
   // --- API: FACILITIES ---
@@ -632,13 +639,18 @@ const handleProcessRequest = async (status) => {
                       <label style={styles.label}>Approval Tier</label>
                       <select name="workflow_tier_id" value={formData.workflow_tier_id} onChange={handleInputChange} style={styles.input}>
                         <option value="">Auto-Approve (Tier 0)</option>
-                        {workflowTiers.map(tier => {
-                          const tId = tier.tier_id || tier.id;
-                          return (
-                            <option key={tId} value={tId}>
-                              Tier {tier.tier_level} ({tier.assigned_role} Approval)
-                            </option>
-                          );
+                        {workflowTiers
+                          // Filter out duplicate tiers by checking the tier_level
+                          .filter((tier, index, self) => 
+                            index === self.findIndex(t => t.tier_level === tier.tier_level)
+                          )
+                          .map(tier => {
+                            const tId = tier.tier_id || tier.id;
+                            return (
+                              <option key={tId} value={tId}>
+                                Tier {tier.tier_level} ({tier.assigned_role} Approval)
+                              </option>
+                            );
                         })}
                       </select>
                     </div>

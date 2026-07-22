@@ -32,6 +32,9 @@ class OperationalRule extends Model
         'advance_booking_limit',
         'approval_tier',
         'grace_period_minutes', // not in either diagram — see migration note
+        'latitude',             // GPS check-in verification — see migration note
+        'longitude',
+        'checkin_radius_meters',
     ];
 
     protected $casts = [
@@ -39,6 +42,9 @@ class OperationalRule extends Model
         'advance_booking_limit' => 'integer',
         'approval_tier' => 'integer',
         'grace_period_minutes' => 'integer',
+        'latitude' => 'float',
+        'longitude' => 'float',
+        'checkin_radius_meters' => 'integer',
     ];
 
     public function facility(): BelongsTo

@@ -26,12 +26,24 @@ class CheckInController extends Controller
      */
     public function store(Request $request, int $id): JsonResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'qr_data' => 'required|string',
+            // Both optional: a device with no GPS / denied permission can
+            // still check in via QR token + arrival window alone (see
+            // CheckInService::processQrCheckIn — GPS check is skipped,
+            // not required, when either is missing).
+            'lat' => 'nullable|numeric|between:-90,90',
+            'lng' => 'nullable|numeric|between:-180,180',
         ]);
 
         try {
-            $checkIn = $this->checkInService->processQrCheckIn($id, $request->qr_data, $request->user()->id);
+            $checkIn = $this->checkInService->processQrCheckIn(
+                $id,
+                $validated['qr_data'],
+                $request->user()->id,
+                $validated['lat'] ?? null,
+                $validated['lng'] ?? null,
+            );
 
             return response()->json([
                 'success' => true,

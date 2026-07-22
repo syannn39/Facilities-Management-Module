@@ -24,6 +24,12 @@ export default function AdminView() {
   const [editingId, setEditingId] = useState(null);
   const [viewingFacility, setViewingFacility] = useState(null);
 
+  // --- MAINTENANCE MODAL STATE ---
+  const [maintenanceFacility, setMaintenanceFacility] = useState(null);
+  const [maintenanceData, setMaintenanceData] = useState({
+    date: '', start_time: '', end_time: '', reason: ''
+  });
+
   // --- REVIEW MODAL STATE ---
   const [viewingRequest, setViewingRequest] = useState(null);
   const [requestRemarks, setRequestRemarks] = useState('');
@@ -301,6 +307,25 @@ const handleProcessRequest = async (status) => {
     }
   };
 
+  const handleMaintenanceSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/availabilities', {
+        facility_id: maintenanceFacility.id || maintenanceFacility.facility_id,
+        date: maintenanceData.date,
+        start_time: maintenanceData.start_time,
+        end_time: maintenanceData.end_time,
+        reason: maintenanceData.reason
+      });
+      alert('Maintenance block successfully scheduled!');
+      setMaintenanceFacility(null);
+      setMaintenanceData({ date: '', start_time: '', end_time: '', reason: '' });
+    } catch (err) {
+      console.error("Failed to block schedule:", err);
+      alert("Error scheduling maintenance block.");
+    }
+  };
+
   // --- QR LOGIC (SY's Addition) ---
   const requestQrCode = async (facility, confirm = false) => {
     const rowId = facility.id || facility.facility_id;
@@ -476,6 +501,18 @@ const handleProcessRequest = async (status) => {
                                 <button style={styles.dropdownItem} onClick={() => openQrModal(facility)}>
                                   {facility.qr_code_token ? 'View / Print QR' : 'Generate QR Code'}
                                 </button>
+
+                                {/* Block Maintenance Button */}
+                                <button 
+                                  style={styles.dropdownItem} 
+                                  onClick={() => {
+                                    setMaintenanceFacility(facility);
+                                    setActiveDropdown(null);
+                                  }}
+                                >
+                                  Block Maintenance
+                                </button>
+
                                 <button style={{...styles.dropdownItem, color: '#c62828'}} onClick={() => handleDelete(rowId)}>Delete</button>
                               </div>
                             )}
@@ -620,6 +657,41 @@ const handleProcessRequest = async (status) => {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* MAINTENANCE BLOCK MODAL */}
+        {maintenanceFacility && (
+          <div style={styles.modalOverlay}>
+            <div style={styles.modalContent}>
+              <h3 style={{ marginTop: 0 }}>Schedule Maintenance</h3>
+              <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>
+                Block time slots for <strong>{maintenanceFacility.name}</strong>. Residents will not be able to book during this time.
+              </p>
+              
+              <form onSubmit={handleMaintenanceSubmit} style={styles.form}>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Date</label>
+                  <input required type="date" value={maintenanceData.date} onChange={(e) => setMaintenanceData({...maintenanceData, date: e.target.value})} style={styles.input} />
+                </div>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Start Time</label>
+                  <input required type="time" value={maintenanceData.start_time} onChange={(e) => setMaintenanceData({...maintenanceData, start_time: e.target.value})} style={styles.input} />
+                </div>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>End Time</label>
+                  <input required type="time" value={maintenanceData.end_time} onChange={(e) => setMaintenanceData({...maintenanceData, end_time: e.target.value})} style={styles.input} />
+                </div>
+                <div style={styles.inputGroup}>
+                  <label style={styles.label}>Reason (Optional)</label>
+                  <input type="text" placeholder="e.g. Deep cleaning, Repairs" value={maintenanceData.reason} onChange={(e) => setMaintenanceData({...maintenanceData, reason: e.target.value})} style={styles.input} />
+                </div>
+                <div style={styles.modalActions}>
+                  <button type="button" onClick={() => setMaintenanceFacility(null)} style={styles.cancelButton}>Cancel</button>
+                  <button type="submit" style={styles.saveButton}>Confirm Block</button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 

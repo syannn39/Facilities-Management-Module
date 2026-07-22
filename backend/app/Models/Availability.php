@@ -10,7 +10,7 @@ class Availability extends Model
     protected $primaryKey = 'availability_id';
     public $timestamps = false;
     const CREATED_AT = 'created_at';
-    const UPDATED_AT = null; // ERD lists only created_at for this table
+    const UPDATED_AT = null; 
 
     protected $fillable = [
         'facility_id',

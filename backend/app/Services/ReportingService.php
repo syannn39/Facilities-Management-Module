@@ -33,9 +33,11 @@ class ReportingService
      */
     public function getBookingFrequency(int $tenantId, string $dateFrom, string $dateTo): array
     {
-        return Booking::where('tenant_id', $tenantId)
+        // RAM PROTECTION: We only need facility_id from Bookings, and id/name from Facilities
+        return Booking::select('facility_id')
+            ->where('tenant_id', $tenantId)
             ->whereBetween('booking_date', [$dateFrom, $dateTo])
-            ->with('facility')
+            ->with('facility:facility_id,name') // The colon specifies exact columns to eager load
             ->get()
             ->groupBy('facility_id')
             ->map(fn ($bookings, $facilityId) => [
@@ -78,19 +80,34 @@ class ReportingService
      */
     public function getApprovalTurnaround(int $tenantId, string $dateFrom, string $dateTo): float
     {
-        $requests = BookingRequest::where('tenant_id', $tenantId)
+        // 1. RAM PROTECTION: Select only the columns needed for math (request_id, created_at)
+        $requests = BookingRequest::select('request_id', 'created_at')
+            ->where('tenant_id', $tenantId)
             ->whereBetween('booking_date', [$dateFrom, $dateTo])
             ->whereIn('status', ['Approved', 'Rejected'])
             ->get();
 
+        if ($requests->isEmpty()) {
+            return 0.0;
+        }
+
+        // 2. NETWORK FIX: Get ALL related logs in ONE single query
+        $requestIds = $requests->pluck('request_id');
+        
+        $allLogs = ApprovalLog::select('request_id', 'actioned_at')
+            ->whereIn('request_id', $requestIds)
+            ->orderByDesc('actioned_at')
+            ->get()
+            ->groupBy('request_id'); // Group them so we can easily attach them to requests
+
         $turnarounds = [];
 
+        // 3. Process entirely in-memory (Takes milliseconds)
         foreach ($requests as $request) {
-            $lastLog = ApprovalLog::where('request_id', $request->request_id)
-                ->orderByDesc('actioned_at')
-                ->first();
-
-            if ($lastLog) {
+            $logsForRequest = $allLogs->get($request->request_id);
+            
+            if ($logsForRequest && $logsForRequest->isNotEmpty()) {
+                $lastLog = $logsForRequest->first();
                 $turnarounds[] = Carbon::parse($request->created_at)->diffInHours(Carbon::parse($lastLog->actioned_at));
             }
         }

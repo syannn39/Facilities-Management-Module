@@ -107,4 +107,6 @@ Route::middleware('auth:sanctum')->group(function () {
     // to WorkflowService now.
     Route::get('/approval-logs/{request_id}', [ApprovalLogController::class, 'index']);
     
+    // Protect this route with auth and ensure only Managers can hit it
+    Route::post('/facilities/block', [FacilityController::class, 'blockFacility'])->middleware(['auth:sanctum']);
 });

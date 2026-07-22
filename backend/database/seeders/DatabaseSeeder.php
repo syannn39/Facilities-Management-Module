@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
                 ['name' => 'BBQ Pit',            'category' => 'Recreation',  'approval_tier' => 1, 'max_capacity' => 20,  'open' => '08:00:00', 'close' => '22:00:00'],
                 ['name' => 'Multi-Purpose Hall', 'category' => 'Event Space', 'approval_tier' => 1, 'max_capacity' => 100, 'open' => '09:00:00', 'close' => '23:00:00'],
                 ['name' => 'Swimming Pool',      'category' => 'Recreation',  'approval_tier' => 0, 'max_capacity' => 30,  'open' => '07:00:00', 'close' => '21:00:00'],
+                ['name' => 'Karaoke Room',       'category' => 'Entertainment',  'approval_tier' => 0, 'max_capacity' => 10,  'open' => '07:00:00', 'close' => '21:00:00'],
             ],
         );
 
@@ -131,7 +132,7 @@ class DatabaseSeeder extends Seeder
                 'opening_time'           => $def['open'],
                 'closing_time'           => $def['close'],
                 'advance_booking_limit'  => 30,
-                'grace_period_minutes'   => 15, // not in ERD — see migration note
+                'grace_period_minutes'   => 15, 
             ]);
 
             $createdFacilities[$def['name']] = $facility;

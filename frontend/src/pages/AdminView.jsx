@@ -132,22 +132,20 @@ export default function AdminView() {
   // 3. EXPORT FILE: Triggered by the PDF/CSV buttons
   const handleExport = async (format) => {
     try {
-      // FIX: Added this line so handleExport knows what dates to send!
       const { date_from, date_to } = getFilterDates(); 
 
       const payload = {
         report_type: 'Dashboard Metrics',
         date_from: date_from, 
         date_to: date_to,
-        format: format
+        format: format,
+        facility_id: facilityFilter
       };
 
       const response = await api.post('/reports/generate', payload);
       const reportId = response.data.data.id || response.data.data.report_id;
 
-      if (!reportId) throw new Error("No Report ID returned");
-
-      const fileResponse = await api.get(`/reports/${reportId}/${format}`, {
+      const fileResponse = await api.get(`/reports/${reportId}/${format}?facility_id=${facilityFilter}`, {
         responseType: 'blob'
       });
 

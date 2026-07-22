@@ -7,6 +7,9 @@ use App\Services\ReportingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Booking; 
 
 /**
  * ReportController — Class Diagram Figure 4.3.2.
@@ -47,6 +50,7 @@ class ReportController extends Controller
             'date_from'   => 'required|date',
             'date_to'     => 'required|date|after_or_equal:date_from',
             'format'      => 'required|in:pdf,csv',
+            'facility_id' => 'nullable|string',
         ]);
 
         $report = Report::create([
@@ -58,7 +62,12 @@ class ReportController extends Controller
             'generated_at' => now(),
         ]);
 
-        $fileUrl = $validated['format'] === 'pdf' ? $report->exportPDF() : $report->exportCSV();
+        $facilityId = $validated['facility_id'] ?? 'all';
+
+        // 3. Pass the filter down into your export functions!
+        $fileUrl = $validated['format'] === 'pdf' 
+            ? $report->exportPDF($facilityId) 
+            : $report->exportCSV($facilityId);
 
         return response()->json([
             'success' => true,
@@ -71,25 +80,24 @@ class ReportController extends Controller
     /**
      * GET /api/reports/{id}/pdf  (auth:sanctum, Manager only)
      */
-    public function exportPDF(int $id)
+    // FIX: Added Request $request to the parameters
+    public function exportPDF(Request $request, int $id)
     {
         $report = Report::findOrFail($id);
-        $fileUrl = $report->exportPDF(); // e.g., "reports/filename.txt"
-        
-        // Forces the browser to download the file from the secure storage folder
-        return response()->download(storage_path('app/' . $fileUrl));
+        $facilityId = $request->query('facility_id', 'all');
+        $fileUrl = $report->exportPDF($facilityId);
+
+        return response()->download(Storage::disk('local')->path($fileUrl));
     }
 
-    /**
-     * GET /api/reports/{id}/csv  (auth:sanctum, Manager only)
-     */
-    public function exportCSV(int $id)
+    // FIX: Added Request $request to the parameters
+    public function exportCSV(Request $request, int $id)
     {
         $report = Report::findOrFail($id);
-        $fileUrl = $report->exportCSV(); // e.g., "reports/filename.csv"
+        $facilityId = $request->query('facility_id', 'all');
+        $fileUrl = $report->exportCSV($facilityId);
 
-        // Forces the browser to download the file from the secure storage folder
-        return response()->download(storage_path('app/' . $fileUrl));
+        return response()->download(Storage::disk('local')->path($fileUrl));
     }
 
     /**

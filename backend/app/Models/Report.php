@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Traits\HasLocalJsonDates;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class Report extends Model
 {
@@ -57,25 +59,86 @@ class Report extends Model
      * exportPDF() per Class Diagram — writes the file via ReportingService
      * and saves the resulting path to file_url on this row.
      */
-    public function exportPDF(): string
+    public function exportPDF(string|int $facilityId = 'all')
     {
-        $data = $this->generateReport();
-        $fileUrl = app(\App\Services\ReportingService::class)->formatPDF($data, "report_{$this->report_id}");
-        $this->update(['file_url' => $fileUrl]);
+        $reportData = $this->gatherReportData($facilityId);
+        $pdf = Pdf::loadView('reports.pdf', ['reportData' => $reportData]);
+        $fileName = 'reports/pdf/report_' . $this->report_id . '.pdf';
+        
+        // FIX: Force Windows to build the directory first
+        Storage::disk('local')->makeDirectory('reports/pdf');
+        
+        Storage::disk('local')->put($fileName, $pdf->output());
 
-        return $fileUrl;
+        return $fileName;
+    }
+
+    public function exportCSV(string|int $facilityId = 'all')
+    {
+        $reportData = $this->gatherReportData($facilityId);
+        $fileName = 'reports/csv/report_' . $this->report_id . '.csv';
+        
+        // FIX: Force Windows to build the directory first
+        Storage::disk('local')->makeDirectory('reports/csv');
+        
+        $csvContent = "Facility Name,Total Bookings\n";
+        foreach ($reportData['booking_frequency'] as $row) {
+            $csvContent .= "{$row['facility_name']},{$row['count']}\n";
+        }
+        
+        $cancellationPercent = number_format($reportData['cancellation_rate'] * 100, 1);
+        $csvContent .= "\nCancellation Rate,{$cancellationPercent}%\n";
+
+        Storage::disk('local')->put($fileName, $csvContent);
+
+        return $fileName;
     }
 
     /**
-     * exportCSV() per Class Diagram.
+     * The Shared Logic: Fetches and filters the data for any export format
      */
-    public function exportCSV(): string
+    private function gatherReportData(string|int $facilityId)
     {
-        $data = $this->generateReport();
-        $fileUrl = app(\App\Services\ReportingService::class)->formatCSV($data, "report_{$this->report_id}");
-        $this->update(['file_url' => $fileUrl]);
+        // 1. Filter Facility Usage
+        $facilitiesQuery = \App\Models\Facility::query();
 
-        return $fileUrl;
+        if ($facilityId !== 'all') {
+            $facilitiesQuery->where('facility_id', $facilityId);
+        }
+
+        $facilities = $facilitiesQuery->withCount(['bookings' => function ($query) {
+            // Use the dates saved on this report instance
+            $query->whereBetween('booking_date', [$this->date_from, $this->date_to]);
+        }])->get();
+
+        $bookingFrequency = $facilities->map(function($facility) {
+            return [
+                'facility_name' => $facility->name,
+                'count'         => $facility->bookings_count
+            ];
+        })->toArray();
+
+        // 2. Filter Overall Stats (Cancellation Rate)
+        $requestsQuery = \App\Models\BookingRequest::whereBetween('booking_date', [$this->date_from, $this->date_to]);
+        
+        if ($facilityId !== 'all') {
+            $requestsQuery->where('facility_id', $facilityId);
+        }
+
+        $totalBookings = (clone $requestsQuery)->count();
+        $failedBookings = (clone $requestsQuery)->whereIn('status', ['Rejected', 'Cancelled'])->count();
+
+        $cancellationRate = $totalBookings > 0 
+            ? ($failedBookings / $totalBookings) 
+            : 0;
+
+        return [
+            'date_from'                 => $this->date_from,
+            'date_to'                   => $this->date_to,
+            'booking_frequency'         => $bookingFrequency,
+            'cancellation_rate'         => $cancellationRate,
+            'approval_turnaround_hours' => 24 // Replace with your actual turnaround logic if needed
+        ];
     }
 
     /**

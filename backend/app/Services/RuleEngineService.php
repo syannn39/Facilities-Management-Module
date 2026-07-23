@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Facility;
+use App\Models\BookingRequest;
 use Carbon\Carbon;
 use Exception;
 
@@ -36,8 +37,18 @@ class RuleEngineService
     {
         $facility = Facility::with('getOperationalRule')->findOrFail($data['facility_id']);
         $rule = $facility->getOperationalRule;
+
+        if (!$rule) {
+            return [
+                'valid' => false,
+                'errors' => ['Operational rules are not configured for this facility.'],
+                'approval_tier' => 0,
+            ];
+        }
+
         $startTime = Carbon::parse($data['start_time']);
         $endTime = Carbon::parse($data['end_time']);
+        $guestCount = isset($data['guest_count']) ? (int) $data['guest_count'] : 1;
 
         $errors = [];
 
@@ -49,8 +60,20 @@ class RuleEngineService
             $errors[] = "Bookings can only be made up to {$rule->advance_booking_limit} days in advance.";
         }
 
-        if (isset($data['guest_count']) && !$this->validateCapacity($rule, (int) $data['guest_count'])) {
+        if (!$this->validateCapacity($rule, $guestCount)) {
             $errors[] = "Guest count exceeds this facility's maximum capacity of {$rule->max_capacity}.";
+        }
+
+        $existingTotalGuests = BookingRequest::where('facility_id', $facility->facility_id)
+            ->whereIn('status', ['Pending', 'Approved'])
+            ->where(function ($query) use ($startTime, $endTime) {
+                $query->where('start_time', '<', $endTime)
+                      ->where('end_time', '>', $startTime);
+            })
+            ->sum('guest_count');
+
+        if (($existingTotalGuests + $guestCount) > $rule->max_capacity) {
+            $errors[] = "This facility is FULL for the selected time slot. Current capacity limit: {$rule->max_capacity}.";
         }
 
         return [

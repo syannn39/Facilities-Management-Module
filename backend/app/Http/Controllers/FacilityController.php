@@ -74,23 +74,28 @@ class FacilityController extends Controller
             'category' => 'required|string|max:255',
             'status' => 'required|string',
             'image_url' => 'nullable|string',
+            
+            // Allow initial governance settings to pass through safely
             'workflow_tier_id' => 'nullable|integer',
-            // Accept the booking limit from React
-            'advance_booking_limit' => 'nullable|integer' 
+            'advance_booking_limit' => 'nullable|integer', 
+            'max_capacity' => 'nullable|integer', // Fixed naming
+            'opening_time' => 'nullable|date_format:H:i:s',
+            'closing_time' => 'nullable|date_format:H:i:s',
+            'grace_period_minutes' => 'nullable|integer'
         ]);
 
         $facility = Facility::create($request->only([
             'name', 'category', 'status', 'image_url'
         ]));
 
-        // Automatically generate the Operational Rule for this facility
+        // Generate the Operational Rule for this facility using validated data
         $facility->getOperationalRule()->create([
-            'advance_booking_limit' => $request->advance_booking_limit ?? 30, // Default to 30 days
-            'max_capacity' => $request->capacity ?? 20, // Syncing capacity
-            'approval_tier' => $request->workflow_tier_id ?? 0, // Syncing tier
-            'opening_time' => '08:00:00', // Safe defaults for now
-            'closing_time' => '22:00:00',
-            'grace_period_minutes' => 15,
+            'advance_booking_limit' => $request->advance_booking_limit ?? 30,
+            'max_capacity' => $request->max_capacity ?? 20, // Now matches database & frontend
+            'approval_tier' => $request->workflow_tier_id ?? 0, 
+            'opening_time' => $request->opening_time ?? '08:00:00', 
+            'closing_time' => $request->closing_time ?? '22:00:00',
+            'grace_period_minutes' => $request->grace_period_minutes ?? 15,
         ]);
 
         return response()->json(['success' => true, 'data' => $facility->load('getOperationalRule')]);
@@ -110,24 +115,31 @@ class FacilityController extends Controller
             'category' => 'sometimes|string|max:255',
             'status' => 'sometimes|string',
             'image_url' => 'nullable|string',
+            
+            // Sync all governance rule fields just in case they are passed here
             'workflow_tier_id' => 'nullable|integer',
-            'advance_booking_limit' => 'nullable|integer'
+            'advance_booking_limit' => 'nullable|integer',
+            'max_capacity' => 'nullable|integer', // Fixed naming
+            'opening_time' => 'nullable|date_format:H:i:s',
+            'closing_time' => 'nullable|date_format:H:i:s',
+            'grace_period_minutes' => 'nullable|integer',
         ]);
 
         $facility->update($request->only([
             'name', 'category', 'status', 'image_url'
         ]));
 
-        // Update or Create the Operational Rule
+        $existingRule = $facility->getOperationalRule;
+
         $facility->getOperationalRule()->updateOrCreate(
             ['facility_id' => $facility->facility_id],
             [
-                'advance_booking_limit' => $request->advance_booking_limit ?? 30, // Default to 30 days
-                'max_capacity' => $request->capacity ?? 20, // Default to 20
-                'approval_tier' => $request->workflow_tier_id ?? 0, // Default to 0
-                'opening_time' => '08:00:00',
-                'closing_time' => '22:00:00',
-                'grace_period_minutes' => 15
+                'advance_booking_limit' => $request->advance_booking_limit ?? ($existingRule->advance_booking_limit ?? 30),
+                'max_capacity' => $request->max_capacity ?? ($existingRule->max_capacity ?? 20), // Fixed naming[cite: 1]
+                'approval_tier' => $request->workflow_tier_id ?? ($existingRule->approval_tier ?? 0), 
+                'opening_time' => $request->opening_time ?? ($existingRule->opening_time ?? '08:00:00'),
+                'closing_time' => $request->closing_time ?? ($existingRule->closing_time ?? '22:00:00'),
+                'grace_period_minutes' => $request->grace_period_minutes ?? ($existingRule->grace_period_minutes ?? 15)
             ]
         );
 

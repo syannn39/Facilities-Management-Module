@@ -222,7 +222,7 @@ const handleProcessRequest = async (status) => {
         image_url: facility.image_url || '', 
         workflow_tier_id: facility.get_operational_rule?.approval_tier ?? 0,
         capacity: facility.get_operational_rule?.max_capacity || '',
-        advance_booking_limit: facility.get_operational_rule?.advance_booking_limit || 30,
+        advance_booking_limit: facility.get_operational_rule?.advance_booking_limit ?? 30,
         grace_period_minutes: facility.get_operational_rule?.grace_period_minutes || 15
       });
     } else {
@@ -276,7 +276,7 @@ const handleProcessRequest = async (status) => {
         max_capacity: formData.capacity,
         opening_time: '08:00:00', // adjust as needed
         closing_time: '22:00:00',
-        advance_booking_limit: formData.advance_booking_limit,
+        advance_booking_limit: Number(formData.advance_booking_limit),
         approval_tier: formData.workflow_tier_id === '' ? 0 : formData.workflow_tier_id,
         grace_period_minutes: formData.grace_period_minutes,
         ...unifiedPayload // Spread the facility data in case your governance route needs it

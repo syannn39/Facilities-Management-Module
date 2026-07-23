@@ -11,23 +11,23 @@ class OperationalRuleController extends Controller
      */
     public function store(Request $request)
     {
-        // 1. Keep your existing validation exactly as it is!
+        // 1. Fully comprehensive validation array
         $validatedData = $request->validate([
-            'facility_id'          => 'required|integer',
-            'max_capacity'         => 'required|integer|min:1',
-            'approval_tier'        => 'required|integer|min:0',
-            'grace_period_minutes' => 'required|integer|min:0',
+            'facility_id'           => 'required|integer',
+            'max_capacity'          => 'required|integer|min:1',
+            'approval_tier'         => 'required|integer|min:0',
+            'grace_period_minutes'  => 'required|integer|min:0',
+            'advance_booking_limit' => 'required|integer|min:0',
+            'opening_time'          => 'required|date_format:H:i:s',
+            'closing_time'          => 'required|date_format:H:i:s',
         ]);
 
-        // 2. Use updateOrCreate instead of create
-        // Arg 1: The column to search for (Does this facility already have a rule?)
-        // Arg 2: The data to update it with (or insert if it doesn't exist)
+        // 2. updateOrCreate using the fully validated data
         $rule = \App\Models\OperationalRule::updateOrCreate(
             ['facility_id' => $validatedData['facility_id']], 
             $validatedData 
         );
 
-        // 3. Return the response
         return response()->json([
             'message' => 'Operational rule saved successfully.',
             'data' => $rule

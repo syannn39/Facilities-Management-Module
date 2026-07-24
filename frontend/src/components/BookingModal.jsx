@@ -25,12 +25,12 @@ export default function BookingModal({ facility, onClose, onBooked }) {
   const advanceLimitDays = facility.get_operational_rule?.advance_booking_limit;
   const todayKey = toLocalDateKey(new Date());
 
-  const [step, setStep] = useState('form'); // 'form' | 'confirm'
+  const [step, setStep] = useState('form');
   const [selectedDate, setSelectedDate] = useState(todayKey);
   const [slots, setSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(true);
   const [slotsError, setSlotsError] = useState('');
-  const [selectedSlot, setSelectedSlot] = useState(null); // { start, end }
+  const [selectedSlot, setSelectedSlot] = useState(null);
   const [purpose, setPurpose] = useState('');
   const [guestCount, setGuestCount] = useState(1);
   const [submitting, setSubmitting] = useState(false);
@@ -48,49 +48,41 @@ export default function BookingModal({ facility, onClose, onBooked }) {
     })
       .then(res => setMaintenanceBlocks(res.data.data || []))
       .catch(err => console.error("Failed to load maintenance blocks", err));
+  }, [facility.facility_id, selectedDate]);
 
-  }, [facility.facility_id, selectedDate]); // 2. Add selectedDate so it re-runs when clicking a new day
-
-  // Helper: Check if slot start time has already passed (Only applies if selectedDate is today)
   const isSlotPassed = (slotStart) => {
     if (selectedDate !== todayKey) return false;
-    
     const now = new Date();
     const [h, m] = slotStart.split(':').map(Number);
-    
     const slotTime = new Date();
     slotTime.setHours(h, m, 0, 0);
-
     return now > slotTime;
   };
 
-  // Helper: Check if selected date exceeds advance booking limit
   const isBeyondAdvanceLimit = () => {
     if (!advanceLimitDays) return false;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
     const targetDate = new Date(`${selectedDate}T00:00:00`);
     const diffTime = targetDate - today;
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
-
     return diffDays > advanceLimitDays;
   };
 
   const beyondLimit = isBeyondAdvanceLimit();
 
-  // helper function (Timezone & String-safe)
   const isMaintenanceSlot = (slotStart, slotEnd) => {
     return maintenanceBlocks.some(block => {
       // 1. Safe blocked check: Assume it's blocked unless it is EXPLICITLY 0 or false.
       // (This fixes it if the new form saved them as undefined/null)
       if (block.is_blocked === false || block.is_blocked === 0) return false;
-
+       
       // 2. Safe Date Check: Replace space with 'T' (fixes cross-browser 'Invalid Date' bugs)
       const safeString = block.date.includes(' ') ? block.date.replace(' ', 'T') : block.date;
       const safeBlockDate = toLocalDateKey(new Date(safeString));
       if (safeBlockDate !== selectedDate) return false;
+
+      
 
       // 3. Time Math: Convert strings like "08:00" or "8:00" into raw minutes (e.g. 480)
       const toMinutes = (timeStr) => {
@@ -191,11 +183,11 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                   )}
                   {!slotsLoading && slots.map((slot) => {
                     const isSelected = selectedSlot?.start === slot.start;
-                    const isMaintenance = !slot.available && isMaintenanceSlot(slot.start, slot.end);
+                    const isMaintenance = isMaintenanceSlot(slot.start, slot.end);
                     const isPassed = isSlotPassed(slot.start);
 
-                    // Combine disable logic: disabled if beyond limit, already passed, or slot taken
-                    const isDisabled = beyondLimit || isPassed || !slot.available;
+                    // Disable the button if the slot is beyond the advance limit, has passed, is under maintenance, is already booked by the current user, or is not available.
+                    const isDisabled = beyondLimit || isPassed || isMaintenance || slot.isBookedByCurrentUser || !slot.available;
 
                     // Determine correct label text and color
                     let labelText = '';
@@ -210,9 +202,18 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                     } else if (isMaintenance) {
                       labelText = 'Maintenance';
                       labelColor = '#ef6c00';
-                    } else if (!slot.available) {
+                    } else if (slot.isBookedByCurrentUser) {
+                      // requirement 1: if the current user has already booked this slot, show "Booked" and disable it
                       labelText = 'Booked';
+                      labelColor = '#0d4cd3';
+                    } else if (!slot.available || slot.remainingCapacity === 0) {
+                      // requirement 2: if the slot is fully booked, show "Fully Booked"
+                      labelText = 'Fully Booked';
                       labelColor = '#c00';
+                    } else {
+                      // zrequirement 3: if the slot is available, show "Slots: X/Y" where X is remainingCapacity and Y is maxLimit
+                      labelText = `Slots: ${slot.remainingCapacity}/${slot.maxLimit}`;
+                      labelColor = '#059669';
                     }
 
                     return (
@@ -227,13 +228,11 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                           ...(isDisabled ? styles.slotBtnTaken : {}),
                         }}
                       >
-                        {slot.start} - {slot.end}
+                        <span>{slot.start} - {slot.end}</span>
                         {isSelected && <span style={styles.dot}>●</span>}
-                        {isDisabled && (
-                          <span style={{ ...styles.takenLabel, color: labelColor }}>
-                            {labelText}
-                          </span>
-                        )}
+                        <span style={{ ...styles.takenLabel, color: labelColor, textDecoration: 'none' }}>
+                          {labelText}
+                        </span>
                       </button>
                     );
                   })}

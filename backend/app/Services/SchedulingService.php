@@ -35,6 +35,7 @@ class SchedulingService
      * @return array{request: BookingRequest, booking: ?Booking}
      * @throws Exception
      */
+
     public function validateAndCreateBooking(array $data, int $userId): array
     {
         $user = \App\Models\User::find($userId);
@@ -60,7 +61,7 @@ class SchedulingService
             'booking_date'   => $startTime->toDateString(),
             'start_time'     => $startTime,
             'end_time'       => $endTime,
-            'status'         => 'Pending', // flipped to 'Approved' below for instant bookings
+            'status'         => 'Pending',
             'purpose_of_use' => $data['purpose_of_use'] ?? null,
             'guest_count'    => $data['guest_count'] ?? 0,
         ]);
@@ -85,8 +86,9 @@ class SchedulingService
      * too once the last required tier approves — it shouldn't have to
      * duplicate this logic.
      */
+
     public function confirmBookingFromRequest(BookingRequest $request, string $bookingType): Booking
-    {
+    {    
         // tenant_id is set explicitly here rather than relying on
         // BelongsToTenant's creating hook (which reads Auth::user()) —
         // this method may be called from a context with no authenticated
@@ -117,13 +119,13 @@ class SchedulingService
             'slot_date'     => $request->booking_date,
             'start_time'    => $request->start_time->format('H:i:s'),
             'end_time'      => $request->end_time->format('H:i:s'),
-            'is_available'  => false, // this slot is now taken
+            'is_available'  => false,
         ]);
 
         return $booking;
     }
 
-    /**
+     /**
      * Algorithm 2: Advanced Overlap Query Matrix.
      * Mathematical rule expression: (new_start < existing_end) AND (new_end > existing_start)
      *
@@ -140,6 +142,7 @@ class SchedulingService
      *
      * @throws Exception
      */
+
     private function assertNoConflict(int $facilityId, Carbon $startTime, Carbon $endTime, $rule): void
     {
         $overlappingCount = BookingRequest::where('facility_id', $facilityId)
@@ -149,8 +152,7 @@ class SchedulingService
                     ->where('end_time', '>', $startTime);
             })->count();
 
-        // Determine the limit based on the rule
-        $limit = ($rule && $rule->is_shared_facility) ? $rule->concurrent_booking_limit : 1;
+        $limit = ($rule && $rule->is_shared_facility) ? ($rule->concurrent_booking_limit ?? 1) : 1;
 
         if ($overlappingCount >= $limit) {
             throw new Exception("This facility has reached its maximum concurrent booking limit for this time slot.");
@@ -180,7 +182,8 @@ class SchedulingService
      *
      * @return array<int, array{start: string, end: string, available: bool}>
      */
-    public function getAvailability(int $facilityId, string $date): array
+
+    public function getAvailability(int $facilityId, string $date, ?int $currentUserId = null): array
     {
         $facility = Facility::with('getOperationalRule')->findOrFail($facilityId);
         $rule = $facility->getOperationalRule;
@@ -197,7 +200,7 @@ class SchedulingService
             ->whereIn('status', ['Pending', 'Approved'])
             ->where('start_time', '<', $dayEnd)
             ->where('end_time', '>', $dayStart)
-            ->get(['start_time', 'end_time']);
+            ->get(['user_id', 'start_time', 'end_time']);
 
         $blocks = Availability::where('facility_id', $facilityId)
             ->where('date', $date)
@@ -210,13 +213,16 @@ class SchedulingService
         while ($slotStart->copy()->addMinutes($slotMinutes)->lessThanOrEqualTo($dayEnd)) {
             $slotEnd = $slotStart->copy()->addMinutes($slotMinutes);
 
-            // COUNT the overlaps instead of just checking if one exists
-            $overlapCount = $existingRequests->filter(function ($req) use ($slotStart, $slotEnd) {
+            $overlappingRequests = $existingRequests->filter(function ($req) use ($slotStart, $slotEnd) {
                 return $slotStart->lessThan($req->end_time) && $slotEnd->greaterThan($req->start_time);
-            })->count();
+            });
 
-            $limit = ($rule && $rule->is_shared_facility) ? $rule->concurrent_booking_limit : 1;
-            $hasReachedCapacity = $overlapCount >= $limit;
+            $bookedCount = $overlappingRequests->count();
+            $isBookedByCurrentUser = $currentUserId ? $overlappingRequests->contains('user_id', $currentUserId) : false;
+
+            $limit = ($rule && $rule->is_shared_facility) ? ($rule->concurrent_booking_limit ?? 1) : 1;
+            $remainingCapacity = max(0, $limit - $bookedCount);
+            $hasReachedCapacity = $bookedCount >= $limit;
 
             $overlapsBlock = $blocks->contains(function ($block) use ($date, $slotStart, $slotEnd) {
                 $blockStart = Carbon::parse("{$date} {$block->start_time}");
@@ -227,10 +233,13 @@ class SchedulingService
             $isPast = $slotStart->lessThan($now);
 
             $slots[] = [
-                'start'     => $slotStart->format('H:i'),
-                'end'       => $slotEnd->format('H:i'),
-                // It is available if it hasn't reached capacity, isn't blocked, and isn't in the past
-                'available' => !$hasReachedCapacity && !$overlapsBlock && !$isPast, 
+                'start'                 => $slotStart->format('H:i'),
+                'end'                   => $slotEnd->format('H:i'),
+                'bookedCount'           => $bookedCount,
+                'remainingCapacity'     => $remainingCapacity,
+                'maxLimit'              => $limit,
+                'isBookedByCurrentUser' => $isBookedByCurrentUser,
+                'available'             => !$hasReachedCapacity && !$overlapsBlock && !$isPast && !$isBookedByCurrentUser, 
             ];
 
             $slotStart = $slotEnd;

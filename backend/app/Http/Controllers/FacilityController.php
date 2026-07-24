@@ -21,7 +21,7 @@ class FacilityController extends Controller
 
     /**
      * GET /api/facilities  (auth:sanctum)
-     *
+     * 
      * Powers the "Browse Facilities" page (Figure 4.1.1). No explicit
      * tenant_id filter is written here on purpose — Facility::class uses
      * the BelongsToTenant trait, so the global TenantScope already injects
@@ -46,8 +46,6 @@ class FacilityController extends Controller
 
     /**
      * GET /api/facilities/{id}  (auth:sanctum)
-     *
-     * show() per Class Diagram.
      */
     public function show(int $id): JsonResponse
     {
@@ -61,7 +59,7 @@ class FacilityController extends Controller
 
     /**
      * POST /api/facilities  (auth:sanctum, Manager only)
-     *
+     * 
      * store() per Class Diagram — lets a manager add a new facility to
      * their own tenant. tenant_id is set explicitly from the
      * authenticated manager rather than accepted from the request body,
@@ -93,10 +91,9 @@ class FacilityController extends Controller
             'name', 'category', 'status', 'image_url'
         ]));
 
-        // Generate the Operational Rule for this facility using validated data
         $facility->getOperationalRule()->create([
             'advance_booking_limit' => $request->advance_booking_limit ?? 30,
-            'max_capacity' => $request->max_capacity ?? 20, // Now matches database & frontend
+            'max_capacity' => $request->max_capacity ?? 20,
             'approval_tier' => $request->workflow_tier_id ?? 0, 
             'opening_time' => $request->opening_time ?? '08:00:00', 
             'closing_time' => $request->closing_time ?? '22:00:00',
@@ -111,8 +108,6 @@ class FacilityController extends Controller
 
     /**
      * PUT /api/facilities/{id}  (auth:sanctum, Manager only)
-     *
-     * update() per Class Diagram.
      */
     public function update(Request $request, int $id): JsonResponse
     {
@@ -124,7 +119,7 @@ class FacilityController extends Controller
             'status' => 'sometimes|string',
             'image_url' => 'nullable|string',
             'location' => 'nullable|string',
-            
+
             // Sync all governance rule fields just in case they are passed here
             'workflow_tier_id' => 'nullable|integer',
             'advance_booking_limit' => 'nullable|integer',
@@ -147,12 +142,12 @@ class FacilityController extends Controller
             ['facility_id' => $facility->facility_id],
             [
                 'advance_booking_limit' => $request->advance_booking_limit ?? ($existingRule->advance_booking_limit ?? 30),
-                'max_capacity' => $request->max_capacity ?? ($existingRule->max_capacity ?? 20), // Fixed naming[cite: 1]
+                'max_capacity' => $request->max_capacity ?? ($existingRule->max_capacity ?? 20),// Fixed naming[cite: 1]
                 'approval_tier' => $request->workflow_tier_id ?? ($existingRule->approval_tier ?? 0), 
                 'opening_time' => $request->opening_time ?? ($existingRule->opening_time ?? '08:00:00'),
                 'closing_time' => $request->closing_time ?? ($existingRule->closing_time ?? '22:00:00'),
                 'grace_period_minutes' => $request->grace_period_minutes ?? ($existingRule->grace_period_minutes ?? 15),
-    
+
                 // Preserve existing GPS values if this request didn't send
                 // new ones, instead of wiping them back to null every time
                 // an unrelated field (like name) gets edited.
@@ -167,8 +162,6 @@ class FacilityController extends Controller
 
     /**
      * DELETE /api/facilities/{id}  (auth:sanctum, Manager only)
-     *
-     * destroy() per Class Diagram.
      */
     public function destroy(int $id): JsonResponse
     {
@@ -183,7 +176,7 @@ class FacilityController extends Controller
 
     /**
      * PATCH /api/facilities/{id}/status  (auth:sanctum, Manager only)
-     *
+     * 
      * updateStatus() per Class Diagram — thin controller wrapper around
      * Facility::updateStatus() (the actual validation of which statuses
      * are legal lives on the model, see Facility.php).
@@ -206,8 +199,8 @@ class FacilityController extends Controller
 
     /**
      * GET /api/facilities/{id}/availability?date=YYYY-MM-DD  (auth:sanctum)
-     *
-     * Returns the fixed list of 2-hour slots for that day, each flagged
+     * 
+     *  Returns the fixed list of 2-hour slots for that day, each flagged
      * available/unavailable, so the booking modal can grey out and disable
      * slots that are already taken — "only can select available slot".
      */
@@ -218,7 +211,9 @@ class FacilityController extends Controller
         ]);
 
         try {
-            $slots = $this->schedulingService->getAvailability($id, $request->query('date'));
+            // Pass the current user's ID to the service layer to help determine availability for that user (e.g., if they already have a booking at that time). If the user is not authenticated, $currentUserId will be null.
+            $currentUserId = $request->user()?->id;
+            $slots = $this->schedulingService->getAvailability($id, $request->query('date'), $currentUserId);
 
             return response()->json([
                 'success' => true,
@@ -248,7 +243,7 @@ class FacilityController extends Controller
             'date'        => $validated['date'],
             'start_time'  => $validated['start_time'],
             'end_time'    => $validated['end_time'],
-            'is_blocked'  => true, // Hardcoded to true for maintenance
+            'is_blocked'  => true,
         ]);
 
         return response()->json([
@@ -259,7 +254,7 @@ class FacilityController extends Controller
 
     /**
      * POST /api/facilities/{id}/qr-code  (auth:sanctum, Manager only)
-     *
+     * 
      * Generates the single check-in QR code for a facility. Each facility
      * gets exactly one token: if a token already exists, this call is a
      * no-op UNLESS `confirm=true` is passed, in which case the old token

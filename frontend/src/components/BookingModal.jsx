@@ -39,15 +39,15 @@ export default function BookingModal({ facility, onClose, onBooked }) {
   // Fetch maintenance blocks for this facility and selected date
   useEffect(() => {
     // 1. Pass the date parameter to Laravel
-    api.get('/availabilities', { 
-      params: { 
+    api.get('/availabilities', {
+      params: {
         facility_id: facility.facility_id,
-        date: selectedDate 
-      } 
+        date: selectedDate
+      }
     })
       .then(res => setMaintenanceBlocks(res.data.data || []))
       .catch(err => console.error("Failed to load maintenance blocks", err));
-      
+
   }, [facility.facility_id, selectedDate]); // 2. Add selectedDate so it re-runs when clicking a new day
 
   // helper function (Timezone & String-safe)
@@ -61,16 +61,16 @@ export default function BookingModal({ facility, onClose, onBooked }) {
       const safeString = block.date.includes(' ') ? block.date.replace(' ', 'T') : block.date;
       const safeBlockDate = toLocalDateKey(new Date(safeString));
       if (safeBlockDate !== selectedDate) return false;
-      
+
       // 3. Time Math: Convert strings like "08:00" or "8:00" into raw minutes (e.g. 480)
       const toMinutes = (timeStr) => {
         const [h, m] = timeStr.split(':').map(Number);
         return (h * 60) + (m || 0);
       };
-      
+
       // 4. Overlap Check using raw numbers (impossible to fail)
-      return toMinutes(slotStart) < toMinutes(block.end_time) && 
-             toMinutes(slotEnd) > toMinutes(block.start_time);
+      return toMinutes(slotStart) < toMinutes(block.end_time) &&
+        toMinutes(slotEnd) > toMinutes(block.start_time);
     });
   };
 
@@ -117,10 +117,25 @@ export default function BookingModal({ facility, onClose, onBooked }) {
         {step === 'form' && (
           <>
             <div style={styles.header}>
-              <div>
-                <h3 style={styles.title}>Book {facility.name}</h3>
+              <div style={{ flex: 1 }}>
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0, fontSize: '22px', color: '#111' }}>
+                    {facility.name}
+                  </h3>
+
+                  {facility.location ? (
+                    <div style={{ fontSize: '13.5px', color: '#666', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      📍 <span>{facility.location}</span>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#aaa', marginTop: '4px' }}>
+                      📍 Location not specified
+                    </div>
+                  )}
+                </div>
                 <p style={styles.subtitle}>Select your preferred date and time to book this facility</p>
               </div>
+
               <button onClick={onClose} style={styles.closeBtn}>×</button>
             </div>
 
@@ -221,6 +236,7 @@ export default function BookingModal({ facility, onClose, onBooked }) {
             <div style={styles.summaryBox}>
               <p style={styles.summaryTitle}>Booking Details:</p>
               <p style={styles.summaryLine}>Facility: {facility.name}</p>
+              {facility.location && <p style={styles.summaryLine}>Location: {facility.location}</p>}
               <p style={styles.summaryLine}>Date: {formattedDate}</p>
               <p style={styles.summaryLine}>Time: {selectedSlot.start} - {selectedSlot.end}</p>
               {requiresApproval && (
@@ -262,16 +278,11 @@ const styles = {
   title: { margin: 0, fontSize: 17, color: '#1a1a2e' },
   subtitle: { margin: '4px 0 0', fontSize: 12.5, color: '#888' },
   closeBtn: { border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#999', lineHeight: 1 },
-  // Widths here are deliberate: 230 (Calendar's fixed width) + 20 (gap) + 200
-  // (slotColumn's floor) = 450, comfortably under modal's 620 - 48 padding =
-  // 572 usable px. Keep this margin — it's what stops the two columns from
-  // flex-wrapping onto separate lines (which is what silently turns the
-  // side-by-side layout into a stacked one if the numbers get too tight).
   bodyRow: { display: 'flex', gap: 20, flexWrap: 'wrap' },
   sectionLabel: { fontSize: 12.5, fontWeight: 600, color: '#444', margin: '0 0 8px' },
   slotColumn: { flex: 1, minWidth: 200 },
   purposeCol: { flex: 2, minWidth: 200, marginTop: 20 },
-  guestCol: { flex: 3, minWidth: 80, marginTop: 20},
+  guestCol: { flex: 3, minWidth: 80, marginTop: 20 },
   slotList: {
     display: 'flex', flexDirection: 'column',
     maxHeight: 220, overflowY: 'auto', paddingRight: 4,
@@ -302,7 +313,7 @@ const styles = {
     background: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 600, color: '#333',
   },
   primaryBtn: {
-    padding: '9px 18px', borderRadius: 8, border: 'none',
+    padding: '9px 18px', borderRadius: '8px', border: 'none',
     background: '#1a1a2e', color: '#fff', cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
   },
   primaryBtnDisabled: { opacity: 0.5, cursor: 'not-allowed' },

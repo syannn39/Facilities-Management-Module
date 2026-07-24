@@ -64,6 +64,12 @@ export default function FacilityList({ onBookingCreated }) {
               </div>
 
               <div style={styles.cardMeta}>
+                {facility.location ? (
+                  <span style={styles.metaLine}>
+                    📍 {facility.location}
+                  </span>
+                ) : null}
+
                 {facility.get_operational_rule?.max_capacity && (
                   <span style={styles.metaLine}>
                     👥 Capacity: {facility.get_operational_rule.max_capacity} people

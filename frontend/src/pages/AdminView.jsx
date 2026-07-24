@@ -1,6 +1,6 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import React, { useState, useEffect } from 'react';
-import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle, Eye} from 'lucide-react';
+import { MoreVertical, X, Printer, RefreshCw, Building2, CheckSquare, BarChart3, Check, XCircle, Eye } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react'; // QR package
 import api from '../api';
 
@@ -21,7 +21,7 @@ export default function AdminView() {
   const [loadingRequests, setLoadingRequests] = useState(false);
 
   // --- UI MODAL STATE ---
-  const [activeDropdown, setActiveDropdown] = useState(null); 
+  const [activeDropdown, setActiveDropdown] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [viewingFacility, setViewingFacility] = useState(null);
@@ -35,15 +35,17 @@ export default function AdminView() {
   // --- REVIEW MODAL STATE ---
   const [viewingRequest, setViewingRequest] = useState(null);
   const [requestRemarks, setRequestRemarks] = useState('');
-  
+
   // --- QR CODE STATE ---
   const [qrFacility, setQrFacility] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', category: 'Standard', status: 'active', image_url: '',
+    location: '',
     workflow_tier_id: '', capacity: '', advance_booking_limit: 30,
-    grace_period_minutes: 15 
+    grace_period_minutes: 15,
+    latitude: '', longitude: '', checkin_radius_meters: 100
   });
 
   // --- Report State ---
@@ -105,7 +107,7 @@ export default function AdminView() {
       setLoadingRequests(false);
     }
   };
-  
+
   // --- API: REPORTS ---
   // 1. HELPER: Get the exact dates based on the dropdown choice
   const getFilterDates = () => {
@@ -126,7 +128,7 @@ export default function AdminView() {
   const fetchReportData = async () => {
     try {
       const { date_from, date_to } = getFilterDates();
-      
+
       const params = new URLSearchParams({
         date_from: date_from,
         date_to: date_to,
@@ -134,7 +136,7 @@ export default function AdminView() {
       });
 
       const response = await api.get(`/reports/dashboard-metrics?${params.toString()}`);
-      
+
       setReportData(response.data.data.chartData);
       setReportStats(response.data.data.stats);
     } catch (err) {
@@ -145,11 +147,11 @@ export default function AdminView() {
   // 3. EXPORT FILE: Triggered by the PDF/CSV buttons
   const handleExport = async (format) => {
     try {
-      const { date_from, date_to } = getFilterDates(); 
+      const { date_from, date_to } = getFilterDates();
 
       const payload = {
         report_type: 'Dashboard Metrics',
-        date_from: date_from, 
+        date_from: date_from,
         date_to: date_to,
         format: format,
         facility_id: facilityFilter
@@ -170,14 +172,14 @@ export default function AdminView() {
       link.click();
       link.parentNode.removeChild(link);
       window.URL.revokeObjectURL(url);
-      
+
     } catch (err) {
       console.error(`Failed to export ${format}:`, err);
       alert(`Error exporting ${format.toUpperCase()}`);
     }
   };
 
-const handleProcessRequest = async (status) => {
+  const handleProcessRequest = async (status) => {
     if (!viewingRequest) return;
     const rId = viewingRequest.request_id || viewingRequest.id;
 
@@ -189,13 +191,13 @@ const handleProcessRequest = async (status) => {
     if (window.confirm(`Are you sure you want to ${status.toUpperCase()} this request?`)) {
       try {
         const payload = { remarks: requestRemarks };
-        
+
         if (status === 'Approved') {
           await api.post(`/approvals/${rId}/approve`, payload);
         } else {
           await api.post(`/approvals/${rId}/reject`, payload);
         }
-        
+
         setViewingRequest(null);
         setRequestRemarks('');
         fetchBookingRequests();
@@ -219,15 +221,19 @@ const handleProcessRequest = async (status) => {
       setEditingId(rowId);
       setFormData({
         name: facility.name, category: facility.category || 'Standard', status: facility.status || 'active',
-        image_url: facility.image_url || '', 
+        image_url: facility.image_url || '',
+        location: facility.location || '',
         workflow_tier_id: facility.get_operational_rule?.approval_tier ?? 0,
         capacity: facility.get_operational_rule?.max_capacity || '',
         advance_booking_limit: facility.get_operational_rule?.advance_booking_limit ?? 30,
-        grace_period_minutes: facility.get_operational_rule?.grace_period_minutes || 15
+        grace_period_minutes: facility.get_operational_rule?.grace_period_minutes || 15,
+        latitude: facility.get_operational_rule?.latitude ?? '',
+        longitude: facility.get_operational_rule?.longitude ?? '',
+        checkin_radius_meters: facility.get_operational_rule?.checkin_radius_meters ?? 100
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', category: 'Standard', status: 'active', image_url: '', workflow_tier_id: '', capacity: '', advance_booking_limit: 30, grace_period_minutes: 15 });
+      setFormData({ name: '', category: 'Standard', status: 'active', image_url: '', workflow_tier_id: '', capacity: '', advance_booking_limit: 30, grace_period_minutes: 15, latitude: '', longitude: '', checkin_radius_meters: 100 });
     }
     setIsModalOpen(true);
   };
@@ -246,6 +252,9 @@ const handleProcessRequest = async (status) => {
         category: formData.category,
         status: formData.status,
         image_url: formData.image_url,
+        location: formData.location,
+        latitude: formData.latitude === '' ? null : formData.latitude,       
+        longitude: formData.longitude === '' ? null : formData.longitude,
       };
 
       let facilityIdToUse = editingId;
@@ -255,11 +264,11 @@ const handleProcessRequest = async (status) => {
         await api.put(`/facilities/${editingId}`, unifiedPayload);
       } else {
         const response = await api.post('/facilities', unifiedPayload);
-        
-        facilityIdToUse = 
-          response.data?.data?.facility_id || 
-          response.data?.data?.id || 
-          response.data?.facility_id || 
+
+        facilityIdToUse =
+          response.data?.data?.facility_id ||
+          response.data?.data?.id ||
+          response.data?.facility_id ||
           response.data?.id;
 
         // Safety check
@@ -279,6 +288,13 @@ const handleProcessRequest = async (status) => {
         advance_booking_limit: Number(formData.advance_booking_limit),
         approval_tier: formData.workflow_tier_id === '' ? 0 : formData.workflow_tier_id,
         grace_period_minutes: formData.grace_period_minutes,
+        // GPS check-in verification — blank strings mean "not set", sent as
+        // null so the backend correctly treats this facility as having no
+        // configured location (skips the distance check) rather than
+        // accidentally saving "" into a numeric/decimal column.
+        latitude: formData.latitude === '' ? null : formData.latitude,
+        longitude: formData.longitude === '' ? null : formData.longitude,
+        checkin_radius_meters: formData.checkin_radius_meters === '' ? 100 : formData.checkin_radius_meters,
         ...unifiedPayload // Spread the facility data in case your governance route needs it
       };
 
@@ -292,9 +308,9 @@ const handleProcessRequest = async (status) => {
       // 5. Clean up and refresh
       closeModal();
       if (typeof fetchFacilities === 'function') {
-        fetchFacilities(); 
+        fetchFacilities();
       }
-      
+
     } catch (err) {
       console.error("Failed to save:", err.response?.data || err);
       alert(`Backend Error: ${JSON.stringify(err.response?.data?.errors || err.response?.data?.message || "Unknown error")}`);
@@ -322,7 +338,7 @@ const handleProcessRequest = async (status) => {
         start_time: maintenanceData.start_time,
         end_time: maintenanceData.end_time,
         reason: maintenanceData.reason,
-        is_blocked: true 
+        is_blocked: true
       });
       alert('Maintenance block successfully scheduled!');
       setMaintenanceFacility(null);
@@ -419,7 +435,7 @@ const handleProcessRequest = async (status) => {
 
   return (
     <div style={styles.appWrapper}>
-      
+
       {/* SIDEBAR NAVIGATION */}
       <div style={styles.sidebar}>
         <div style={styles.sidebarHeader}>
@@ -440,7 +456,7 @@ const handleProcessRequest = async (status) => {
 
       {/* MAIN CONTENT AREA */}
       <div style={styles.mainContent}>
-        
+
         {/* --- VIEW: FACILITIES --- */}
         {activeTab === 'facilities' && (
           <div style={styles.pageContainer}>
@@ -462,7 +478,7 @@ const handleProcessRequest = async (status) => {
                     <th style={styles.th}>Advance Booking Limit</th>
                     <th style={styles.th}>Approval Tier</th>
                     <th style={styles.th}>Status</th>
-                    <th style={{...styles.th, textAlign: 'center'}}>Actions</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -472,10 +488,10 @@ const handleProcessRequest = async (status) => {
                     <tr><td colSpan="8" style={styles.emptyState}>No facilities found.</td></tr>
                   ) : (
                     facilities.map((facility) => {
-                      const rowId = facility.id || facility.facility_id; 
+                      const rowId = facility.id || facility.facility_id;
                       return (
                         <tr key={rowId} style={styles.tableRow}>
-                          <td style={{...styles.td, fontWeight: 'bold', color: '#1a73e8', cursor: 'pointer'}} onClick={() => setViewingFacility(facility)}>
+                          <td style={{ ...styles.td, fontWeight: 'bold', color: '#1a73e8', cursor: 'pointer' }} onClick={() => setViewingFacility(facility)}>
                             {facility.name}
                           </td>
                           <td style={styles.td}>
@@ -483,21 +499,21 @@ const handleProcessRequest = async (status) => {
                               <img src={facility.image_url} alt="Facility" style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }} />
                             ) : <span style={{ color: '#aaa', fontSize: '12px' }}>No Image</span>}
                           </td>
-                          <td style={{...styles.td, textTransform: 'capitalize'}}>{facility.category || 'Standard'}</td>
+                          <td style={{ ...styles.td, textTransform: 'capitalize' }}>{facility.category || 'Standard'}</td>
                           <td style={styles.td}>{facility.get_operational_rule?.max_capacity || 'N/A'}</td>
                           <td style={styles.td}>{facility.get_operational_rule?.advance_booking_limit ? `${facility.get_operational_rule.advance_booking_limit} days` : 'Not set'}</td>
                           <td style={styles.td}><span style={styles.tierBadge}>{(() => {// Look up the exact tier based on the nested approval_tier ID
-                                const tierId = facility.get_operational_rule?.approval_tier;
-                                if (!tierId || tierId === 0) return 'Auto-Approve (Tier 0)';
-                                
-                                const matchedTier = workflowTiers.find(t => (t.id || t.tier_id) === tierId);
-                                return matchedTier ? `Tier ${matchedTier.tier_level} (${matchedTier.assigned_role})` : `Tier ${tierId}`;
-                              })()}
-                            </span>
+                            const tierId = facility.get_operational_rule?.approval_tier;
+                            if (!tierId || tierId === 0) return 'Auto-Approve (Tier 0)';
+
+                            const matchedTier = workflowTiers.find(t => (t.id || t.tier_id) === tierId);
+                            return matchedTier ? `Tier ${matchedTier.tier_level} (${matchedTier.assigned_role})` : `Tier ${tierId}`;
+                          })()}
+                          </span>
                           </td>
                           <td style={styles.td}><span style={facility.status === 'active' ? styles.statusActive : styles.statusWarning}>{facility.status || 'Active'}</span></td>
-                          
-                          <td style={{...styles.td, position: 'relative', textAlign: 'center'}}>
+
+                          <td style={{ ...styles.td, position: 'relative', textAlign: 'center' }}>
                             <button style={styles.iconButton} onClick={() => setActiveDropdown(activeDropdown === rowId ? null : rowId)}>
                               <MoreVertical size={20} />
                             </button>
@@ -510,8 +526,8 @@ const handleProcessRequest = async (status) => {
                                 </button>
 
                                 {/* Block Maintenance Button */}
-                                <button 
-                                  style={styles.dropdownItem} 
+                                <button
+                                  style={styles.dropdownItem}
                                   onClick={() => {
                                     setMaintenanceFacility(facility);
                                     setActiveDropdown(null);
@@ -520,7 +536,7 @@ const handleProcessRequest = async (status) => {
                                   Block Maintenance
                                 </button>
 
-                                <button style={{...styles.dropdownItem, color: '#c62828'}} onClick={() => handleDelete(rowId)}>Delete</button>
+                                <button style={{ ...styles.dropdownItem, color: '#c62828' }} onClick={() => handleDelete(rowId)}>Delete</button>
                               </div>
                             )}
                           </td>
@@ -531,7 +547,7 @@ const handleProcessRequest = async (status) => {
                 </tbody>
               </table>
             </div>
-            
+
             {/* FACILITY DETAIL MODAL */}
             {viewingFacility && (
               <div style={styles.modalOverlay}>
@@ -568,6 +584,21 @@ const handleProcessRequest = async (status) => {
                       <div style={styles.flexBetween}>
                         <span style={styles.detailValue}>Standard Hours</span>
                         <span style={{ fontWeight: 'bold', color: '#333' }}>{formatTime(viewingFacility.get_operational_rule?.opening_time)} - {formatTime(viewingFacility.get_operational_rule?.closing_time)}</span>
+                      </div>
+                    </div>
+                    <div style={styles.detailCard}>
+                      <h4 style={{ margin: '0 0 16px 0' }}>Check-in GPS</h4>
+                      <div style={styles.flexBetween}>
+                        <span style={styles.detailValue}>Coordinates</span>
+                        <span style={{ fontWeight: 'bold', color: '#333' }}>
+                          {viewingFacility.get_operational_rule?.latitude != null && viewingFacility.get_operational_rule?.longitude != null
+                            ? `${viewingFacility.get_operational_rule.latitude}, ${viewingFacility.get_operational_rule.longitude}`
+                            : 'Not set (GPS check skipped)'}
+                        </span>
+                      </div>
+                      <div style={styles.flexBetween}>
+                        <span style={styles.detailValue}>Allowed Radius</span>
+                        <span style={{ fontWeight: 'bold', color: '#333' }}>{viewingFacility.get_operational_rule?.checkin_radius_meters ?? 100} m</span>
                       </div>
                     </div>
                     <div style={styles.detailCard}>
@@ -634,13 +665,44 @@ const handleProcessRequest = async (status) => {
                     <div style={styles.inputGroup}><label style={styles.label}>Advance Booking Limit (Days)</label><input required type="number" name="advance_booking_limit" value={formData.advance_booking_limit} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Grace Period (Minutes)</label><input required type="number" name="grace_period_minutes" value={formData.grace_period_minutes} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Image URL</label><input type="text" name="image_url" value={formData.image_url} onChange={handleInputChange} style={styles.input} /></div>
+
+                    <div style={styles.inputGroup}>
+                      <label style={styles.label}>Location / Venue Description</label>
+                      <input
+                        type="text"
+                        name="location"
+                        placeholder="e.g. Level 2, Clubhouse Block A"
+                        value={formData.location}
+                        onChange={handleInputChange}
+                        style={styles.input}
+                      />
+                    </div>
+
+                    <div style={{ borderTop: '1px solid #eaeaea', paddingTop: '12px', marginTop: '4px' }}>
+                      <p style={{ ...styles.label, marginBottom: '10px' }}>Check-in GPS Verification <span style={{ fontWeight: 'normal', color: '#888' }}>(optional — leave blank to skip GPS check)</span></p>
+                      <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                        <div style={{ ...styles.inputGroup, flex: 1 }}>
+                          <label style={styles.label}>Latitude</label>
+                          <input type="number" step="any" name="latitude" placeholder="e.g. 3.1234567" value={formData.latitude} onChange={handleInputChange} style={styles.input} />
+                        </div>
+                        <div style={{ ...styles.inputGroup, flex: 1 }}>
+                          <label style={styles.label}>Longitude</label>
+                          <input type="number" step="any" name="longitude" placeholder="e.g. 101.1234567" value={formData.longitude} onChange={handleInputChange} style={styles.input} />
+                        </div>
+                      </div>
+                      <div style={styles.inputGroup}>
+                        <label style={styles.label}>Allowed Radius (meters)</label>
+                        <input type="number" min="1" name="checkin_radius_meters" value={formData.checkin_radius_meters} onChange={handleInputChange} style={styles.input} />
+                      </div>
+                    </div>
+
                     <div style={styles.inputGroup}>
                       <label style={styles.label}>Approval Tier</label>
                       <select name="workflow_tier_id" value={formData.workflow_tier_id} onChange={handleInputChange} style={styles.input}>
                         <option value="">Auto-Approve (Tier 0)</option>
                         {workflowTiers
                           // Filter out duplicate tiers by checking the tier_level
-                          .filter((tier, index, self) => 
+                          .filter((tier, index, self) =>
                             index === self.findIndex(t => t.tier_level === tier.tier_level)
                           )
                           .map(tier => {
@@ -650,7 +712,7 @@ const handleProcessRequest = async (status) => {
                                 Tier {tier.tier_level} ({tier.assigned_role} Approval)
                               </option>
                             );
-                        })}
+                          })}
                       </select>
                     </div>
                     <div style={styles.inputGroup}>
@@ -680,23 +742,23 @@ const handleProcessRequest = async (status) => {
               <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>
                 Block time slots for <strong>{maintenanceFacility.name}</strong>. Residents will not be able to book during this time.
               </p>
-              
+
               <form onSubmit={handleMaintenanceSubmit} style={styles.form}>
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>Date</label>
-                  <input required type="date" value={maintenanceData.date} onChange={(e) => setMaintenanceData({...maintenanceData, date: e.target.value})} style={styles.input} />
+                  <input required type="date" value={maintenanceData.date} onChange={(e) => setMaintenanceData({ ...maintenanceData, date: e.target.value })} style={styles.input} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>Start Time</label>
-                  <input required type="time" value={maintenanceData.start_time} onChange={(e) => setMaintenanceData({...maintenanceData, start_time: e.target.value})} style={styles.input} />
+                  <input required type="time" value={maintenanceData.start_time} onChange={(e) => setMaintenanceData({ ...maintenanceData, start_time: e.target.value })} style={styles.input} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>End Time</label>
-                  <input required type="time" value={maintenanceData.end_time} onChange={(e) => setMaintenanceData({...maintenanceData, end_time: e.target.value})} style={styles.input} />
+                  <input required type="time" value={maintenanceData.end_time} onChange={(e) => setMaintenanceData({ ...maintenanceData, end_time: e.target.value })} style={styles.input} />
                 </div>
                 <div style={styles.inputGroup}>
                   <label style={styles.label}>Reason (Optional)</label>
-                  <input type="text" placeholder="e.g. Deep cleaning, Repairs" value={maintenanceData.reason} onChange={(e) => setMaintenanceData({...maintenanceData, reason: e.target.value})} style={styles.input} />
+                  <input type="text" placeholder="e.g. Deep cleaning, Repairs" value={maintenanceData.reason} onChange={(e) => setMaintenanceData({ ...maintenanceData, reason: e.target.value })} style={styles.input} />
                 </div>
                 <div style={styles.modalActions}>
                   <button type="button" onClick={() => setMaintenanceFacility(null)} style={styles.cancelButton}>Cancel</button>
@@ -724,7 +786,7 @@ const handleProcessRequest = async (status) => {
                     <th style={styles.th}>Guests</th>
                     <th style={styles.th}>Requested Slot</th>
                     <th style={styles.th}>Status</th>
-                    <th style={{...styles.th, textAlign: 'center'}}>Decision</th>
+                    <th style={{ ...styles.th, textAlign: 'center' }}>Decision</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -740,54 +802,54 @@ const handleProcessRequest = async (status) => {
 
                       return (
                         <tr key={rId} style={styles.tableRow}>
-                        {/* 1. Request ID */}
-                        <td style={{...styles.td, fontWeight: 'bold', color: '#555'}}>#{rId}</td>
-                        
-                        {/* 2. Resident */}
-                        <td style={styles.td}>{requestUser?.name || 'Unknown Resident'}</td>
-                        
-                        {/* 3. Facility */}
-                        <td style={{...styles.td, fontWeight: 'bold'}}>{requestFacility?.name || 'Unknown Facility'}</td>
-                        
-                        {/* 4. Purpose */}
-                        <td style={{...styles.td, fontStyle: 'italic', color: '#666', fontSize: '13px'}}>
-                          {request.purpose_of_use || '-'}
-                        </td>
+                          {/* 1. Request ID */}
+                          <td style={{ ...styles.td, fontWeight: 'bold', color: '#555' }}>#{rId}</td>
 
-                        {/* 5. Guests */}
-                        <td style={{...styles.td, textAlign: 'center'}}>
-                          {request.guest_count || 0}
-                        </td>
+                          {/* 2. Resident */}
+                          <td style={styles.td}>{requestUser?.name || 'Unknown Resident'}</td>
 
-                        {/* 6. Requested Slot (This was missing/shifted!) */}
-                        <td style={styles.td}>
-                          {formatDateTime(request.start_time)} <br/>
-                          <span style={{color: '#888', fontSize: '12px'}}>to {formatDateTime(request.end_time)}</span>
-                        </td>
-                        
-                        {/* 7. Status */}
-                        <td style={styles.td}>
-                          <span style={request.status === 'Pending' ? styles.statusWarning : request.status === 'Approved' ? styles.statusActive : styles.statusRejected}>
-                            {request.status}
-                          </span>
-                        </td>
-                        
-                        {/* 8. Decision (Button) */}
-                        <td style={{...styles.td, textAlign: 'center'}}>
-                          {request.status === 'Pending' || request.status === 'pending' ? (
-                            <button style={styles.reviewBtn} 
-                              onClick={() => {
-                                setViewingRequest(request);
-                                setRequestRemarks('');
-                              }}
-                            >
-                              <Eye size={16} /> Review
-                            </button>
-                          ) : (
-                            <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
-                          )}
-                        </td>
-                      </tr>
+                          {/* 3. Facility */}
+                          <td style={{ ...styles.td, fontWeight: 'bold' }}>{requestFacility?.name || 'Unknown Facility'}</td>
+
+                          {/* 4. Purpose */}
+                          <td style={{ ...styles.td, fontStyle: 'italic', color: '#666', fontSize: '13px' }}>
+                            {request.purpose_of_use || '-'}
+                          </td>
+
+                          {/* 5. Guests */}
+                          <td style={{ ...styles.td, textAlign: 'center' }}>
+                            {request.guest_count || 0}
+                          </td>
+
+                          {/* 6. Requested Slot (This was missing/shifted!) */}
+                          <td style={styles.td}>
+                            {formatDateTime(request.start_time)} <br />
+                            <span style={{ color: '#888', fontSize: '12px' }}>to {formatDateTime(request.end_time)}</span>
+                          </td>
+
+                          {/* 7. Status */}
+                          <td style={styles.td}>
+                            <span style={request.status === 'Pending' ? styles.statusWarning : request.status === 'Approved' ? styles.statusActive : styles.statusRejected}>
+                              {request.status}
+                            </span>
+                          </td>
+
+                          {/* 8. Decision (Button) */}
+                          <td style={{ ...styles.td, textAlign: 'center' }}>
+                            {request.status === 'Pending' || request.status === 'pending' ? (
+                              <button style={styles.reviewBtn}
+                                onClick={() => {
+                                  setViewingRequest(request);
+                                  setRequestRemarks('');
+                                }}
+                              >
+                                <Eye size={16} /> Review
+                              </button>
+                            ) : (
+                              <span style={{ color: '#aaa', fontSize: '13px' }}>Actioned</span>
+                            )}
+                          </td>
+                        </tr>
                       );
                     })
                   )}
@@ -805,7 +867,7 @@ const handleProcessRequest = async (status) => {
                 <h3 style={{ margin: 0 }}>Review Booking Request</h3>
                 <button style={styles.iconButton} onClick={() => setViewingRequest(null)}><X size={20} /></button>
               </div>
-              
+
               <div style={{ backgroundColor: '#f8f9fa', padding: '16px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #eaeaea' }}>
                 <div style={styles.flexBetween}>
                   <span style={styles.detailLabel}>Resident</span>
@@ -813,7 +875,7 @@ const handleProcessRequest = async (status) => {
                 </div>
                 <div style={styles.flexBetween}>
                   <span style={styles.detailLabel}>Facility</span>
-                  <span style={{...styles.detailValue, fontWeight: 'bold'}}>{viewingRequest.get_facility?.name || viewingRequest.facility?.name}</span>
+                  <span style={{ ...styles.detailValue, fontWeight: 'bold' }}>{viewingRequest.get_facility?.name || viewingRequest.facility?.name}</span>
                 </div>
                 <div style={styles.flexBetween}>
                   <span style={styles.detailLabel}>Start Time</span>
@@ -834,13 +896,13 @@ const handleProcessRequest = async (status) => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <span style={{ color: '#666', fontSize: '14px' }}>Guest Count</span>
-                <span style={{ 
-                  fontWeight: '500', 
+                <span style={{
+                  fontWeight: '500',
                   fontSize: '14px',
                   /* Optional: Turn text red if it exceeds capacity */
                   color: viewingRequest.guest_count > (viewingRequest.facility?.max_capacity || 999) ? 'red' : 'inherit'
                 }}>
-                  {viewingRequest.guest_count || 0} 
+                  {viewingRequest.guest_count || 0}
                   <span style={{ color: '#999', fontSize: '12px', marginLeft: '4px' }}>
                     (Max: {viewingRequest.facility?.get_operational_rule?.max_capacity || 'N/A'})
                   </span>
@@ -848,10 +910,10 @@ const handleProcessRequest = async (status) => {
               </div>
 
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Remarks / Reason <span style={{color: '#ef6c00', fontWeight: 'normal'}}>(Required for rejection)</span></label>
-                <textarea 
-                  rows="3" 
-                  style={{...styles.input, resize: 'vertical'}} 
+                <label style={styles.label}>Remarks / Reason <span style={{ color: '#ef6c00', fontWeight: 'normal' }}>(Required for rejection)</span></label>
+                <textarea
+                  rows="3"
+                  style={{ ...styles.input, resize: 'vertical' }}
                   placeholder="Enter any notes for the resident..."
                   value={requestRemarks}
                   onChange={(e) => setRequestRemarks(e.target.value)}
@@ -859,14 +921,14 @@ const handleProcessRequest = async (status) => {
               </div>
 
               <div style={{ ...styles.modalActions, marginTop: '24px' }}>
-                <button 
-                  style={styles.cancelActionBtn} 
+                <button
+                  style={styles.cancelActionBtn}
                   onClick={() => handleProcessRequest('Rejected')}
                 >
                   <XCircle size={16} /> Reject Request
                 </button>
-                <button 
-                  style={styles.confirmActionBtn} 
+                <button
+                  style={styles.confirmActionBtn}
                   onClick={() => handleProcessRequest('Approved')}
                 >
                   <Check size={16} /> Approve Request
@@ -887,19 +949,19 @@ const handleProcessRequest = async (status) => {
 
             {/* Filter Bar */}
             <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-              
+
               {/* Facility Filter */}
-              <select 
-                value={facilityFilter} 
-                onChange={(e) => setFacilityFilter(e.target.value)} 
+              <select
+                value={facilityFilter}
+                onChange={(e) => setFacilityFilter(e.target.value)}
                 style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}
               >
                 <option value="all">All Facilities</option>
-                
+
                 {/* Fixed: using facility_id to ensure a number is sent to Laravel */}
                 {facilities && facilities.map((facility) => (
-                  <option 
-                    key={facility.facility_id || facility.id} 
+                  <option
+                    key={facility.facility_id || facility.id}
                     value={facility.facility_id || facility.id}
                   >
                     {facility.name}
@@ -908,9 +970,9 @@ const handleProcessRequest = async (status) => {
               </select>
 
               {/* Date Filter */}
-              <select 
-                value={dateFilter} 
-                onChange={(e) => setDateFilter(e.target.value)} 
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
                 style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc', flex: 1 }}
               >
                 <option value="30days">Last 30 Days</option>
@@ -918,26 +980,26 @@ const handleProcessRequest = async (status) => {
               </select>
 
               <button onClick={() => fetchReportData()}
-                  style={{...styles.reviewBtn, backgroundColor: '#333', color: 'white'}}>
-                  Generate Report
-                </button>
-                
-                {/* Wire up the PDF button */}
-                <button 
-                  onClick={() => handleExport('pdf')} 
-                  style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}
-                >
-                  ⬇ Export PDF
-                </button>
-                
-                {/* Wire up the CSV button */}
-                <button 
-                  onClick={() => handleExport('csv')} 
-                  style={{...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd'}}
-                >
-                  ⬇ Export CSV
-                </button>
-              
+                style={{ ...styles.reviewBtn, backgroundColor: '#333', color: 'white' }}>
+                Generate Report
+              </button>
+
+              {/* Wire up the PDF button */}
+              <button
+                onClick={() => handleExport('pdf')}
+                style={{ ...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd' }}
+              >
+                ⬇ Export PDF
+              </button>
+
+              {/* Wire up the CSV button */}
+              <button
+                onClick={() => handleExport('csv')}
+                style={{ ...styles.reviewBtn, backgroundColor: '#f3f4f6', color: '#333', border: '1px solid #ddd' }}
+              >
+                ⬇ Export CSV
+              </button>
+
             </div>
 
             {/* KPI Cards */}
@@ -949,14 +1011,14 @@ const handleProcessRequest = async (status) => {
                 <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>{reportStats?.total_requests || 0}</h3>
                 <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>Lifetime requests</p>
               </div>
-              
+
               {/* Card 2: Cancellation Rate */}
               <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                 <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Rejection & Cancellation Rate</p>
                 <h3 style={{ margin: '8px 0', fontSize: '32px', color: '#111' }}>{reportStats?.cancellation_rate || 0}%</h3>
                 <p style={{ margin: 0, color: '#9ca3af', fontSize: '12px' }}>Of total requests</p>
               </div>
-              
+
               {/* Card 3: Rejected / Cancelled */}
               <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
                 <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Rejected / Cancelled</p>
@@ -973,10 +1035,10 @@ const handleProcessRequest = async (status) => {
                   <ResponsiveContainer>
                     <BarChart data={reportData}> {/* 1. Connect the real data here! */}
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                      <XAxis dataKey="name" tick={{fill: '#666'}} axisLine={{stroke: '#ccc'}} tickLine={false} />
-                      <YAxis tick={{fill: '#666'}} axisLine={false} tickLine={false} />
-                      <Tooltip 
-                        cursor={{fill: '#f9fafb'}}
+                      <XAxis dataKey="name" tick={{ fill: '#666' }} axisLine={{ stroke: '#ccc' }} tickLine={false} />
+                      <YAxis tick={{ fill: '#666' }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f9fafb' }}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
                       />
                       {/* 2. Apply the color directly to the Bar so it dynamically scales */}
@@ -988,8 +1050,8 @@ const handleProcessRequest = async (status) => {
                     Loading chart data...
                   </div>*/
                   <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                  No booking data found for the selected filters.
-                </div>
+                    No booking data found for the selected filters.
+                  </div>
                 )}
               </div>
             </div>
@@ -1010,37 +1072,37 @@ const styles = {
   navItemActive: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', border: 'none', background: '#e8f0fe', cursor: 'pointer', borderRadius: '8px', fontSize: '15px', color: '#1a73e8', fontWeight: 'bold', textAlign: 'left' },
   navIcon: { opacity: 0.8 },
   mainContent: { flexGrow: 1, padding: '40px', overflowY: 'auto' },
-  
+
   pageContainer: { maxWidth: '1200px', margin: '0 auto' },
   content: { maxWidth: '1100px', margin: '0 auto' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
   title: { margin: 0, fontSize: '24px', color: '#1a1a2e' },
   addButton: { backgroundColor: '#1a1a2e', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
   errorBanner: { backgroundColor: '#ffebee', color: '#c62828', padding: '12px', borderRadius: '6px', marginBottom: '20px' },
-  
+
   tableContainer: { backgroundColor: 'white', borderRadius: '10px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', overflow: 'visible' },
   table: { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
   tableHeadRow: { backgroundColor: '#fafafa', borderBottom: '2px solid #eaeaea' },
   th: { padding: '16px', color: '#555', fontSize: '14px' },
   tableRow: { borderBottom: '1px solid #eaeaea' },
   td: { padding: '16px', color: '#333', fontSize: '14px' },
-  
+
   statusActive: { backgroundColor: '#e8f5e9', color: '#2e7d32', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize' },
   statusWarning: { backgroundColor: '#fff3e0', color: '#ef6c00', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize' },
   statusRejected: { backgroundColor: '#ffebee', color: '#c62828', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize' },
   tierBadge: { border: '1px solid #eaeaea', backgroundColor: '#f9f9f9', color: '#555', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold' },
   emptyState: { textAlign: 'center', padding: '40px', color: '#888' },
-  
+
   iconButton: { background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', color: '#555', borderRadius: '4px' },
   dropdownMenu: { position: 'absolute', right: '40px', top: '50%', backgroundColor: 'white', border: '1px solid #eaeaea', borderRadius: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 10, display: 'flex', flexDirection: 'column', minWidth: '130px', overflow: 'hidden' },
   dropdownItem: { padding: '10px 16px', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer', fontSize: '14px', borderBottom: '1px solid #f5f5f5', fontWeight: '600', color: '#333' },
-  
+
   approveBtn: { display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#e8f5e9', color: '#2e7d32', border: '1px solid #c8e6c9', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },
   rejectBtn: { display: 'flex', alignItems: 'center', gap: '4px', backgroundColor: '#ffebee', color: '#c62828', border: '1px solid #ffcdd2', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' },
 
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   modalContent: { backgroundColor: 'white', padding: '30px', borderRadius: '12px', width: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' },
-  
+
   detailModalContent: { backgroundColor: '#f4f5f7', borderRadius: '12px', width: '800px', maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' },
   detailHeader: { backgroundColor: 'white', padding: '24px 32px', borderBottom: '1px solid #eaeaea', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 10 },
   detailBody: { padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: '20px' },

@@ -16,13 +16,19 @@ class CheckInService
      *
      * facility_id is now a direct column on Booking (Class Diagram), so
      * this no longer needs to go through bookingRequest to reach it.
-     * Failed attempts (wrong QR, outside window) are also written to
-     * check_ins with status != 'Success' for an audit trail of rejected
-     * scans, not just successful ones.
+     * Failed attempts (wrong QR, outside window, GPS mismatch) are also
+     * written to check_ins with status != 'Success' for an audit trail of
+     * rejected scans, not just successful ones.
+     * $lat/$lng are the scanning device's reported GPS coordinates, sent
+     * alongside the scanned QR token. Both are nullable: if the frontend
+     * couldn't get a location (permission denied, no GPS hardware) or the
+     * facility itself has no lat/lng configured yet, the GPS check is
+     * skipped entirely rather than blocking check-in — QR token + arrival
+     * window remain the two checks that always apply.
      *
      * @throws Exception
      */
-    public function processQrCheckIn(int $bookingId, string $qrData, int $userId): CheckIn
+    public function processQrCheckIn(int $bookingId, string $qrData, int $userId, ?float $lat = null, ?float $lng = null): CheckIn
     {
         // Global TenantScope automatically safeguards this retrieval from ID cross-tampering
         $booking = Booking::with('facility.getOperationalRule')->findOrFail($bookingId);
@@ -54,6 +60,28 @@ class CheckInService
             throw new Exception("Wrong QR Code! This code does not match your reserved facility.");
         }
 
+        // GPS Cross-Check: confirm the scanning device is actually near
+        // the facility, not just that it has the right QR string (a QR
+        // image can be photographed/forwarded and scanned from anywhere).
+        // Reuses the same 'Invalid_Location' status as a QR mismatch —
+        // both represent "you are not verifiably at this facility".
+        $rule = $booking->facility->getOperationalRule;
+        if ($lat !== null && $lng !== null && $rule && $rule->latitude !== null && $rule->longitude !== null) {
+            $distanceMeters = $this->haversineDistanceMeters(
+                (float) $lat,
+                (float) $lng,
+                (float) $rule->latitude,
+                (float) $rule->longitude
+            );
+
+            $radius = $rule->checkin_radius_meters ?? 100;
+
+            if ($distanceMeters > $radius) {
+                $this->recordAttempt($booking, $userId, $now, 'Invalid_Location');
+                throw new Exception("You're too far from this facility to check in. Please make sure location services are on and you're on-site.");
+            }
+        }
+
         // Window calculation evaluation rules
         $windowMinutes = $booking->facility->getOperationalRule->grace_period_minutes ?? 15;
         $diffInMinutes = $now->diffInMinutes($booking->start_time, false);
@@ -68,6 +96,26 @@ class CheckInService
         $booking->update(['status' => 'Checked_In']);
 
         return $this->recordAttempt($booking, $userId, $now, 'Success');
+    }
+
+    /**
+     * Great-circle distance between two lat/lng points, in meters.
+     * Standard Haversine formula — accurate enough for "same building /
+     * same campus" scale distances (the km-scale approximation error is
+     * negligible at this range).
+     */
+    private function haversineDistanceMeters(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadiusMeters = 6371000;
+
+        $latDelta = deg2rad($lat2 - $lat1);
+        $lngDelta = deg2rad($lng2 - $lng1);
+
+        $a = sin($latDelta / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($lngDelta / 2) ** 2;
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadiusMeters * $c;
     }
 
     /**

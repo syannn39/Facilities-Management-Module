@@ -77,7 +77,12 @@ class FacilityController extends Controller
             
             // Allow initial governance settings to pass through safely
             'workflow_tier_id' => 'nullable|integer',
-            'advance_booking_limit' => 'nullable|integer', 
+            'advance_booking_limit' => 'nullable|integer',
+            // GPS check-in verification (optional — a facility left
+            // unconfigured simply skips the distance check at check-in time)
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'checkin_radius_meters' => 'nullable|integer|min:1',
             'max_capacity' => 'nullable|integer', // Fixed naming
             'opening_time' => 'nullable|date_format:H:i:s',
             'closing_time' => 'nullable|date_format:H:i:s',
@@ -96,6 +101,9 @@ class FacilityController extends Controller
             'opening_time' => $request->opening_time ?? '08:00:00', 
             'closing_time' => $request->closing_time ?? '22:00:00',
             'grace_period_minutes' => $request->grace_period_minutes ?? 15,
+            'latitude' => $request->latitude,
+            'longitude' => $request->longitude,
+            'checkin_radius_meters' => $request->checkin_radius_meters ?? 100,
         ]);
 
         return response()->json(['success' => true, 'data' => $facility->load('getOperationalRule')]);
@@ -115,18 +123,22 @@ class FacilityController extends Controller
             'category' => 'sometimes|string|max:255',
             'status' => 'sometimes|string',
             'image_url' => 'nullable|string',
+            'location' => 'nullable|string',
             
             // Sync all governance rule fields just in case they are passed here
             'workflow_tier_id' => 'nullable|integer',
             'advance_booking_limit' => 'nullable|integer',
-            'max_capacity' => 'nullable|integer', // Fixed naming
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'checkin_radius_meters' => 'nullable|integer|min:1',
+            'max_capacity' => 'nullable|integer', 
             'opening_time' => 'nullable|date_format:H:i:s',
             'closing_time' => 'nullable|date_format:H:i:s',
             'grace_period_minutes' => 'nullable|integer',
         ]);
 
         $facility->update($request->only([
-            'name', 'category', 'status', 'image_url'
+            'name', 'category', 'status', 'image_url', 'location', 'latitude', 'longitude'
         ]));
 
         $existingRule = $facility->getOperationalRule;
@@ -139,7 +151,14 @@ class FacilityController extends Controller
                 'approval_tier' => $request->workflow_tier_id ?? ($existingRule->approval_tier ?? 0), 
                 'opening_time' => $request->opening_time ?? ($existingRule->opening_time ?? '08:00:00'),
                 'closing_time' => $request->closing_time ?? ($existingRule->closing_time ?? '22:00:00'),
-                'grace_period_minutes' => $request->grace_period_minutes ?? ($existingRule->grace_period_minutes ?? 15)
+                'grace_period_minutes' => $request->grace_period_minutes ?? ($existingRule->grace_period_minutes ?? 15),
+    
+                // Preserve existing GPS values if this request didn't send
+                // new ones, instead of wiping them back to null every time
+                // an unrelated field (like name) gets edited.
+                'latitude' => $request->has('latitude') ? $request->latitude : ($existingRule->latitude ?? null),
+                'longitude' => $request->has('longitude') ? $request->longitude : ($existingRule->longitude ?? null),
+                'checkin_radius_meters' => $request->checkin_radius_meters ?? ($existingRule->checkin_radius_meters ?? 100),
             ]
         );
 

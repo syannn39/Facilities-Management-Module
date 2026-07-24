@@ -70,11 +70,19 @@ export default function MyBookings() {
         {requests.map((req) => {
           const info = describeRequest(req);
           const booking = req.get_booking;
+          const facility = req.facility || req.get_facility;
 
           return (
             <div key={req.request_id} style={styles.card}>
               <div style={styles.cardLeft}>
-                <div style={styles.facilityName}>{req.facility?.name || 'Facility'}</div>
+                <div style={styles.facilityName}>{facility?.name || 'Facility'}</div>
+                
+                {facility?.location ? (
+                  <div style={styles.locationRow}>
+                    📍 {facility.location}
+                  </div>
+                ) : null}
+
                 <div style={styles.timeRow}>
                   🕐 {formatDate(req.start_time)} · {formatTime(req.start_time)} - {formatTime(req.end_time)}
                 </div>
@@ -164,6 +172,7 @@ const styles = {
   card: { border: '1px solid #e1e4e8', borderRadius: 12, padding: '16px 20px', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   cardLeft: { flex: 1 },
   facilityName: { fontWeight: 700, fontSize: 15, color: '#1a1a2e' },
+  locationRow: { fontSize: 12.5, color: '#555', marginTop: 3 }, 
   timeRow: { fontSize: 12.5, color: '#666', marginTop: 4 },
   note: { fontSize: 12, marginTop: 4 },
   cardRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 },
@@ -173,5 +182,5 @@ const styles = {
   overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
   scannerModal: { background: '#fff', borderRadius: 12, padding: 16, width: 520, maxWidth: '92vw', position: 'relative' },
   closeBtn: { position: 'absolute', top: 10, right: 14, border: 'none', background: 'none', fontSize: 20, cursor: 'pointer' },
-  doneBtn: { display: 'block', margin: '10px auto 0', padding: '8px 24px', borderRadius: 8, border: '1px solid #e1e4e8', background: '#fff', cursor: 'pointer' },
+  doneBtn: { display: 'block', margin: '10px auto 0', padding: '8px 24px', borderRadius: '8px', border: '1px solid #e1e4e8', background: '#fff', cursor: 'pointer' },
 };

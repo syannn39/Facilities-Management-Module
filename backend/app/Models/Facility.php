@@ -19,6 +19,7 @@ class Facility extends Model
         'category',
         'status',
         'image_url',
+        'location',
         'workflow_tier_id'
     ];
 

@@ -2,6 +2,37 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import api from '../api';
 
+/**
+ * Grabs the device's current GPS position, wrapped in a Promise so it can
+ * be awaited alongside the QR decode flow. Resolves to { lat, lng } on
+ * success, or null on ANY failure (permission denied, no GPS hardware,
+ * timeout, non-HTTPS context, etc) — GPS is a best-effort enhancement
+ * here, never a hard requirement to check in. The backend
+ * (CheckInService::processQrCheckIn) already treats a missing lat/lng as
+ * "skip the distance check", so returning null just means this scan
+ * falls back to QR token + arrival window only, exactly like before this
+ * feature existed.
+ */
+function getCurrentPosition(timeoutMs = 8000) {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve(null);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                resolve({
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                });
+            },
+            () => resolve(null), // denied / unavailable / any error — fall back silently
+            { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
+        );
+    });
+}
+
 export default function QrScanner({ bookingId }) {
     const [scanFeedback, setScanFeedback] = useState('');
     const [isSuccess, setIsSuccess] = useState(false);
@@ -22,13 +53,21 @@ export default function QrScanner({ bookingId }) {
                 if (isProcessing) return;
 
                 setIsProcessing(true);
-                setScanFeedback("Processing...");
+                setScanFeedback("Getting your location...");
 
                 try {
                     if (scannerRef.current) await scannerRef.current.clear().catch(() => { });
 
+                    // Best-effort location grab — never blocks or fails the
+                    // check-in itself, see getCurrentPosition() above.
+                    const position = await getCurrentPosition();
+
+                    setScanFeedback("Processing...");
+
                     const response = await api.post(`/bookings/${bookingId}/check-in`, {
-                        qr_data: decodedText
+                        qr_data: decodedText,
+                        lat: position?.lat ?? null,
+                        lng: position?.lng ?? null,
                     });
 
                     if (response.data.success) {

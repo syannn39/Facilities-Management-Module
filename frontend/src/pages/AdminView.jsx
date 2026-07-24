@@ -680,7 +680,7 @@ export default function AdminView() {
                           onChange={(e) => setFormData(prev => ({ ...prev, is_shared_facility: e.target.checked }))} 
                           style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                         />
-                        Enable Shared Slot Bookings (e.g., Gym, Swimming Pool)
+                        Enable Shared Slot Bookings 
                       </label>
                       
                       {formData.is_shared_facility && (

@@ -89,6 +89,9 @@ class Report extends Model
         $cancellationPercent = number_format($reportData['cancellation_rate'] * 100, 1);
         $csvContent .= "\nCancellation Rate,{$cancellationPercent}%\n";
 
+        // Add this right before you return or save the CSV string/file in Laravel
+        $csvContent = chr(239) . chr(187) . chr(191) . $csvContent;
+
         Storage::disk('local')->put($fileName, $csvContent);
 
         return $fileName;

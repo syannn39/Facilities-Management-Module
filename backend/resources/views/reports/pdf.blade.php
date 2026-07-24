@@ -1,10 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <style>
+        @font-face {
+            font-family: 'Noto Sans SC';
+            src: url("{{ storage_path('fonts/NotoSansSC-Regular.ttf') }}") format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+    </style>
     <title>Facility Usage Report</title>
 </head>
-<body style="font-family: Arial, sans-serif; color: #333; line-height: 1.6; padding: 20px;">
+<body>
     
     <div style="border-bottom: 2px solid #3b82f6; margin-bottom: 20px; padding-bottom: 10px;">
         <h1 style="margin: 0; font-size: 24px;">Facility Usage Report</h1>

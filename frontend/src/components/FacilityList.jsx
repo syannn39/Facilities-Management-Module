@@ -41,9 +41,10 @@ export default function FacilityList({ onBookingCreated }) {
 
       <div style={styles.grid}>
         {facilities.map((facility) => {
-          const requiresApproval = (facility.get_operational_rule?.approval_tier ?? 0) > 0;
+          const approvalTier = facility.get_operational_rule?.approval_tier ?? 0;
+          const requiresApproval = approvalTier > 0;
           
-          // facilities can have a status of "active", "inactive", or "maintenance". We want to disable the booking button if the facility is not available for booking.
+          // facilities can have a status of "active", "inactive", or "maintenance".
           const status = facility.status ? facility.status.trim().toLowerCase() : 'active';
           const isInactive = status === 'inactive';
           const isMaintenance = status === 'maintenance';
@@ -83,11 +84,13 @@ export default function FacilityList({ onBookingCreated }) {
                   </span>
                 ) : null}
 
-                {facility.get_operational_rule?.max_capacity && (
+                {/* only show capacity for facilities that require approval */}
+                {approvalTier > 0 && facility.get_operational_rule?.max_capacity && (
                   <span style={styles.metaLine}>
                     👥 Capacity: {facility.get_operational_rule.max_capacity} people
                   </span>
                 )}
+
                 {facility.get_operational_rule?.opening_time && facility.get_operational_rule?.closing_time && (
                   <span style={styles.metaLine}>
                     🕐 {facility.get_operational_rule.opening_time.slice(0, 5)} - {facility.get_operational_rule.closing_time.slice(0, 5)}

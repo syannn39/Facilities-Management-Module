@@ -45,7 +45,9 @@ export default function AdminView() {
     location: '',
     workflow_tier_id: '', capacity: '', advance_booking_limit: 30,
     grace_period_minutes: 15,
-    latitude: '', longitude: '', checkin_radius_meters: 100
+    latitude: '', longitude: '', checkin_radius_meters: 100,
+    is_shared_facility: false, 
+    concurrent_booking_limit: 1
   });
 
   // --- Report State ---
@@ -229,11 +231,15 @@ export default function AdminView() {
         grace_period_minutes: facility.get_operational_rule?.grace_period_minutes || 15,
         latitude: facility.get_operational_rule?.latitude ?? '',
         longitude: facility.get_operational_rule?.longitude ?? '',
-        checkin_radius_meters: facility.get_operational_rule?.checkin_radius_meters ?? 100
+        checkin_radius_meters: facility.get_operational_rule?.checkin_radius_meters ?? 100,
+        // Add these two lines:
+        is_shared_facility: facility.get_operational_rule?.is_shared_facility ?? false,
+        concurrent_booking_limit: facility.get_operational_rule?.concurrent_booking_limit ?? 1,
       });
     } else {
       setEditingId(null);
-      setFormData({ name: '', category: 'Standard', status: 'active', image_url: '', workflow_tier_id: '', capacity: '', advance_booking_limit: 30, grace_period_minutes: 15, latitude: '', longitude: '', checkin_radius_meters: 100 });
+      // Ensure the reset state includes the new fields:
+      setFormData({ name: '', category: 'Standard', status: 'active', image_url: '', workflow_tier_id: '', capacity: '', advance_booking_limit: 30, grace_period_minutes: 15, latitude: '', longitude: '', checkin_radius_meters: 100, is_shared_facility: false, concurrent_booking_limit: 1 });
     }
     setIsModalOpen(true);
   };
@@ -295,6 +301,8 @@ export default function AdminView() {
         latitude: formData.latitude === '' ? null : formData.latitude,
         longitude: formData.longitude === '' ? null : formData.longitude,
         checkin_radius_meters: formData.checkin_radius_meters === '' ? 100 : formData.checkin_radius_meters,
+        is_shared_facility: formData.is_shared_facility,
+        concurrent_booking_limit: formData.is_shared_facility ? Number(formData.concurrent_booking_limit) : 1,
         ...unifiedPayload // Spread the facility data in case your governance route needs it
       };
 
@@ -662,6 +670,35 @@ export default function AdminView() {
                     <div style={styles.inputGroup}><label style={styles.label}>Facility Name</label><input required type="text" name="name" value={formData.name} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Category</label><input required type="text" name="category" value={formData.category} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Max Capacity</label><input required type="number" name="capacity" value={formData.capacity} onChange={handleInputChange} style={styles.input} /></div>
+                    {/* --- NEW SHARED FACILITY UI --- */}
+                    <div style={{ ...styles.inputGroup, marginTop: '8px', marginBottom: '8px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #eaeaea' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px', color: '#333', fontWeight: '500' }}>
+                        <input 
+                          type="checkbox" 
+                          name="is_shared_facility"
+                          checked={formData.is_shared_facility} 
+                          onChange={(e) => setFormData(prev => ({ ...prev, is_shared_facility: e.target.checked }))} 
+                          style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                        />
+                        Enable Shared Slot Bookings (e.g., Gym, Swimming Pool)
+                      </label>
+                      
+                      {formData.is_shared_facility && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #ddd' }}>
+                          <label style={styles.label}>Maximum Bookings Allowed Per Slot</label>
+                          <input 
+                            required 
+                            type="number" 
+                            min="1" 
+                            name="concurrent_booking_limit" 
+                            value={formData.concurrent_booking_limit} 
+                            onChange={handleInputChange} 
+                            style={{ ...styles.input, marginTop: '6px', width: '100%' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                    {/* ------------------------------ */}
                     <div style={styles.inputGroup}><label style={styles.label}>Advance Booking Limit (Days)</label><input required type="number" name="advance_booking_limit" value={formData.advance_booking_limit} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Grace Period (Minutes)</label><input required type="number" name="grace_period_minutes" value={formData.grace_period_minutes} onChange={handleInputChange} style={styles.input} /></div>
                     <div style={styles.inputGroup}><label style={styles.label}>Image URL</label><input type="text" name="image_url" value={formData.image_url} onChange={handleInputChange} style={styles.input} /></div>

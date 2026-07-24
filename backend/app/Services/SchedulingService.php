@@ -50,8 +50,8 @@ class SchedulingService
         if (!$evaluation['valid']) {
             throw new Exception(implode(' ', $evaluation['errors']));
         }
-
-        $this->assertNoConflict($facility->facility_id, $startTime, $endTime);
+        
+        $this->assertNoConflict($facility->facility_id, $startTime, $endTime, $facility->getOperationalRule);
 
         $request = BookingRequest::create([
             'tenant_id'      => $facility->tenant_id,
@@ -140,17 +140,20 @@ class SchedulingService
      *
      * @throws Exception
      */
-    private function assertNoConflict(int $facilityId, Carbon $startTime, Carbon $endTime): void
+    private function assertNoConflict(int $facilityId, Carbon $startTime, Carbon $endTime, $rule): void
     {
-        $hasConflict = BookingRequest::where('facility_id', $facilityId)
+        $overlappingCount = BookingRequest::where('facility_id', $facilityId)
             ->whereIn('status', ['Pending', 'Approved'])
             ->where(function ($query) use ($startTime, $endTime) {
                 $query->where('start_time', '<', $endTime)
                     ->where('end_time', '>', $startTime);
-            })->exists();
+            })->count();
 
-        if ($hasConflict) {
-            throw new Exception("This facility is no longer available. Please select another time.");
+        // Determine the limit based on the rule
+        $limit = ($rule && $rule->is_shared_facility) ? $rule->concurrent_booking_limit : 1;
+
+        if ($overlappingCount >= $limit) {
+            throw new Exception("This facility has reached its maximum concurrent booking limit for this time slot.");
         }
     }
 
@@ -207,9 +210,13 @@ class SchedulingService
         while ($slotStart->copy()->addMinutes($slotMinutes)->lessThanOrEqualTo($dayEnd)) {
             $slotEnd = $slotStart->copy()->addMinutes($slotMinutes);
 
-            $overlapsRequest = $existingRequests->contains(function ($req) use ($slotStart, $slotEnd) {
+            // COUNT the overlaps instead of just checking if one exists
+            $overlapCount = $existingRequests->filter(function ($req) use ($slotStart, $slotEnd) {
                 return $slotStart->lessThan($req->end_time) && $slotEnd->greaterThan($req->start_time);
-            });
+            })->count();
+
+            $limit = ($rule && $rule->is_shared_facility) ? $rule->concurrent_booking_limit : 1;
+            $hasReachedCapacity = $overlapCount >= $limit;
 
             $overlapsBlock = $blocks->contains(function ($block) use ($date, $slotStart, $slotEnd) {
                 $blockStart = Carbon::parse("{$date} {$block->start_time}");
@@ -217,16 +224,13 @@ class SchedulingService
                 return $slotStart->lessThan($blockEnd) && $slotEnd->greaterThan($blockStart);
             });
 
-            // A slot that has already started (or already ended) as of
-            // right now can never be legally booked — mirrors
-            // BookingController's `start_time => after:now` rule, just
-            // applied here too so the UI never offers it in the first place.
             $isPast = $slotStart->lessThan($now);
 
             $slots[] = [
                 'start'     => $slotStart->format('H:i'),
                 'end'       => $slotEnd->format('H:i'),
-                'available' => !$overlapsRequest && !$overlapsBlock && !$isPast,
+                // It is available if it hasn't reached capacity, isn't blocked, and isn't in the past
+                'available' => !$hasReachedCapacity && !$overlapsBlock && !$isPast, 
             ];
 
             $slotStart = $slotEnd;

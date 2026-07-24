@@ -92,6 +92,13 @@ export default function MyBookings() {
         // Show purpose or guest count only if purpose exists or guest_count is strictly greater than 0
         const hasPurposeOrGuests = req.purpose_of_use || (req.guest_count !== null && req.guest_count !== undefined && req.guest_count > 0);
 
+        // Determine if action buttons (Scan QR / Cancel) should be available:
+        // 1. If it has a Confirmed booking (`booking.status === 'Confirmed'`)
+        // 2. OR if it's an approved request awaiting booking creation (`req.status === 'Approved'` without a booking row yet)
+        const isConfirmedBooking = booking && booking.status === 'Confirmed';
+        const isApprovedRequestWithoutBooking = req.status === 'Approved' && !booking;
+        const canTakeActions = isConfirmedBooking || isApprovedRequestWithoutBooking;
+
         return (
           <div style={styles.modalOverlay} onClick={() => setSelectedRequest(null)}>
             <div style={styles.detailModal} onClick={(e) => e.stopPropagation()}>
@@ -118,8 +125,8 @@ export default function MyBookings() {
                   <div style={styles.infoGroup}>
                     <span style={styles.infoLabel}>Date & Time</span>
                     <span style={styles.infoValue}>
-                      {formatDate(req.start_time)} <br />
-                      {formatTime(req.start_time)} - {formatTime(req.end_time)}
+                      📅 {formatDate(req.start_time)} <br />
+                      ⏰ {formatTime(req.start_time)} - {formatTime(req.end_time)}
                     </span>
                   </div>
 
@@ -160,18 +167,24 @@ export default function MyBookings() {
 
               {/* Modal Footer Actions */}
               <div style={styles.modalFooter}>
-                {info.showScanButton && booking && (
+                {/* Show Scan QR Code button for both Confirmed bookings and Approved requests */}
+                {canTakeActions && (
                   <button 
                     style={styles.scanBtnModal} 
-                    onClick={() => { setSelectedRequest(null); setScanningBookingId(booking.booking_id); }}
+                    onClick={() => { 
+                      const targetId = booking ? booking.booking_id : req.request_id;
+                      setSelectedRequest(null); 
+                      setScanningBookingId(targetId); 
+                    }}
                   >
                     📱 Scan QR Code
                   </button>
                 )}
 
-                {booking && booking.status === 'Confirmed' && (
+                {/* Show Cancel button for both Confirmed bookings and Approved requests */}
+                {canTakeActions && (
                   <button
-                    onClick={(e) => handleCancel(booking.booking_id, e)}
+                    onClick={(e) => handleCancel(booking ? booking.booking_id : req.request_id, e)}
                     style={styles.cancelBtnModal}
                   >
                     Cancel Booking
@@ -211,7 +224,7 @@ function describeRequest(req) {
   if (req.status === 'Rejected') return { label: 'Rejected', badgeBg: '#fff0f1', badgeColor: '#bd2130' };
 
   const booking = req.get_booking;
-  if (!booking) return { label: 'Approved', badgeBg: '#eaf2ff', badgeColor: '#0d4cd3' };
+  if (!booking) return { label: 'Approved', badgeBg: '#eaf2ff', badgeColor: '#0d4cd3', showScanButton: true };
 
   switch (booking.status) {
     case 'Confirmed':
@@ -257,7 +270,7 @@ const styles = {
   
   cardRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 },
   badge: { fontSize: 11.5, fontWeight: 700, borderRadius: 12, padding: '4px 12px' },
-  detailsPrompt: { fontSize: '11.5px', color: '#64748b', fontWeight: 600 }, // Gray color style updated
+  detailsPrompt: { fontSize: '11.5px', color: '#64748b', fontWeight: 600 },
 
   // Modal overlay and container styles
   modalOverlay: { 

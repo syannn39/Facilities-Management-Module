@@ -28,6 +28,7 @@ use Exception;
  * (a single int) is what currently drives whether approval is needed at
  * all, and there's no existing UI for a multi-person review queue.
  */
+
 class WorkflowService
 {
     public function __construct(
@@ -35,32 +36,15 @@ class WorkflowService
         private NotificationService $notificationService,
     ) {}
 
-    /**
-     * routeToApprover() per Class Diagram — true if there's at least one
-     * WorkflowTier configured for this request's facility (i.e. there's
-     * somewhere to route it). False means the facility has approval_tier
-     * > 0 but no WorkflowTier rows were ever configured for it — a
-     * legitimate "needs approval but nobody's set up to give it" gap a
-     * manager should be alerted to separately, not something this method
-     * papers over.
-     */
     public function routeToApprover(BookingRequest $request): bool
     {
         return $this->getNextApprover($request) !== null;
     }
 
-    /**
-     * getNextApprover() per Class Diagram — the WorkflowTier representing
-     * whichever tier_level should act on this request next, based on how
-     * many ApprovalLog entries already exist for it. Returns null if every
-     * configured tier has already signed off (use isFullyApproved() to
-     * tell that apart from "no tiers configured at all").
-     */
     public function getNextApprover(BookingRequest $request): ?WorkflowTier
     {
         // 1. Get the rule (might be null if the database was wiped!)
         $rule = $request->facility->getOperationalRule;
-        
         $tier = null;
         
         // 2. Only look for a specific tier if the rule actually exists
@@ -73,7 +57,6 @@ class WorkflowService
             $defaultTier = new WorkflowTier();
             $defaultTier->assigned_role = 'Manager';
             $defaultTier->tier_level = 1;
-            
             return $defaultTier; 
         }
         
@@ -81,73 +64,87 @@ class WorkflowService
     }
 
     /**
-     * isFullyApproved() per Class Diagram — true once every configured
-     * WorkflowTier for this request's facility has an 'Approved' log entry.
+     * Ensure that if no tiers are strictly configured, a single approval is enough to fully approve.
      */
     public function isFullyApproved(BookingRequest $request): bool
     {
         $rule = $request->facility->getOperationalRule;
-        if (!$rule) {
-            return false;
+        
+        // If no rule or approval_tier is 0, it doesn't need workflow approval
+        if (!$rule || $rule->approval_tier <= 0) {
+            return true;
         }
 
         $totalTiers = WorkflowTier::where('rule_id', $rule->rule_id)->count();
+        
+        // If workflow tiers were never seeded/created in the database, 
+        // fall back to treating 1 approval log as fully approved!
         if ($totalTiers === 0) {
-            return false; // nothing configured — can't be "fully" approved through a workflow that doesn't exist
+            return ApprovalLog::where('request_id', $request->request_id)
+                ->where('action', 'Approved')
+                ->exists();
         }
 
         $tiersApproved = ApprovalLog::where('request_id', $request->request_id)
             ->where('action', 'Approved')
             ->count();
 
-        return $tiersApproved >= $totalTiers;
+        return $tiersApproved >= min($totalTiers, $rule->approval_tier);
     }
 
-    /**
-     * processApproval() per Class Diagram — records the approval, and if
-     * this was the last required tier, confirms the booking (creates the
-     * actual Booking row via SchedulingService) and notifies the resident.
-     * If more tiers remain, the request stays Pending and nothing else
-     * happens yet — the next tier's manager still needs to act.
-     *
-     * @throws Exception if $approver doesn't hold the role this tier requires.
-     */
     public function processApproval(BookingRequest $request, User $approver): bool
     {
         $tier = $this->getNextApprover($request);
 
         if (!$tier) {
-            throw new Exception('This request has no pending approval tier (already fully approved, or no workflow configured).');
+            throw new Exception('This request has no pending approval tier.');
         }
 
-        // --- FLEXIBLE ROLE CHECK ---
-        $isManager = ($approver->hasRole('Manager') && $tier->assigned_role === 'Facility Manager');
+        $isManager = ($approver->hasRole('Manager') && ($tier->assigned_role === 'Facility Manager' || $tier->assigned_role === 'Manager'));
         
         if (!$approver->hasRole($tier->assigned_role) && !$isManager) {
             throw new Exception("Only a user with the '{$tier->assigned_role}' role can approve this tier.");
         }
 
-        ApprovalLog::logAction($request->request_id, $approver->id, $tier->tier_level, 'Approved');
+        // Log the approval action (Note: ApprovalController might have already logged it, 
+        // but checking prevents duplicate log creation if called sequentially)
+        $alreadyLogged = ApprovalLog::where('request_id', $request->request_id)
+            ->where('approver_id', $approver->id)
+            ->where('action', 'Approved')
+            ->exists();
 
+        if (!$alreadyLogged) {
+            ApprovalLog::logAction($request->request_id, $approver->id, $tier->tier_level, 'Approved');
+        }
+
+        // Check if fully approved now
         if ($this->isFullyApproved($request)) {
+            // 1. Mark request status as Approved
+            $request->update(['status' => 'Approved']);
+
+            // 2. CREATE THE BOOKING ROW & SCHEDULE VIA SCHEDULING SERVICE
             $this->schedulingService->confirmBookingFromRequest($request, 'Request');
+            
+            // 3. Send notification
             $this->notificationService->sendApprovalNotification($request->fresh());
         }
 
         return true;
     }
 
-    /**
-     * processRejection() per Class Diagram — any single tier rejecting is
-     * final: the whole request is marked Rejected immediately, regardless
-     * of how many earlier tiers had already approved it.
-     */
     public function processRejection(BookingRequest $request, User $approver, ?string $reason = null): bool
     {
         $tier = $this->getNextApprover($request);
         $tierLevel = $tier->tier_level ?? 1;
 
-        ApprovalLog::logAction($request->request_id, $approver->id, $tierLevel, 'Rejected', $reason);
+        $alreadyLogged = ApprovalLog::where('request_id', $request->request_id)
+            ->where('approver_id', $approver->id)
+            ->where('action', 'Rejected')
+            ->exists();
+
+        if (!$alreadyLogged) {
+            ApprovalLog::logAction($request->request_id, $approver->id, $tierLevel, 'Rejected', $reason);
+        }
 
         $request->update(['status' => 'Rejected']);
 

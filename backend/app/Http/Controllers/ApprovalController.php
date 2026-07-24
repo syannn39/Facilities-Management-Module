@@ -12,12 +12,6 @@ use App\Models\ApprovalLog;
 
 /**
  * ApprovalController — Class Diagram Figure 4.3.2.
- *
- * Named to match the diagram exactly (the older ApprovalLogController
- * file is left in place, untouched, as an empty stub — routes now point
- * here instead). approve()/reject() delegate to WorkflowService, which
- * is what actually knows how multi-tier routing and ApprovalLog entries
- * work; this controller's job is just request validation + auth context.
  */
 class ApprovalController extends Controller
 {
@@ -25,10 +19,6 @@ class ApprovalController extends Controller
 
     /**
      * GET /api/approvals/pending  (auth:sanctum, Manager only)
-     *
-     * getPendingRequests() per Class Diagram — every Pending request
-     * whose next approval tier matches this manager's role, within their
-     * own tenant (TenantScope on BookingRequest already restricts that).
      */
     public function getPendingRequests(Request $request): JsonResponse
     {
@@ -37,13 +27,6 @@ class ApprovalController extends Controller
         $allPending = BookingRequest::with('facility.getOperationalRule', 'user')
             ->where('status', 'Pending')
             ->get();
-
-        // LOGGING: Let's see what the system thinks about each request
-        foreach ($allPending as $req) {
-            $tier = $this->workflowService->getNextApprover($req);
-            $hasRole = $tier ? $manager->hasRole($tier->assigned_role) : false;
-            Log::info("Request {$req->request_id} Check: Tier found? " . ($tier ? "Yes" : "No") . " | Role match? " . ($hasRole ? "Yes" : "No"));
-        }
 
         $pending = $allPending->filter(function (BookingRequest $bookingRequest) use ($manager) {
             $tier = $this->workflowService->getNextApprover($bookingRequest);
@@ -61,6 +44,11 @@ class ApprovalController extends Controller
      */
     public function approve(Request $request, int $request_id): JsonResponse
     {
+        // Optional remarks when approving
+        $validated = $request->validate([
+            'remarks' => 'nullable|string',
+        ]);
+
         $bookingRequest = BookingRequest::findOrFail($request_id);
 
         try {
@@ -68,22 +56,21 @@ class ApprovalController extends Controller
             $tier = $this->workflowService->getNextApprover($bookingRequest);
             $tierLevel = $tier ? $tier->tier_level : 1;
 
-            // 2. Update status
-            $bookingRequest->update(['status' => 'Approved']);
-            
-            // 3. Explicitly write to the approval_logs table
+            // 2. Explicitly write to the approval_logs table
             ApprovalLog::logAction(
                 $bookingRequest->request_id,
                 $request->user()->id,
                 $tierLevel,
-                'Approved'
+                'Approved',
+                $validated['remarks'] ?? null
             );
             
+            // 3. Delegate the actual status transition and booking creation to WorkflowService
             $this->workflowService->processApproval($bookingRequest, $request->user());
 
             return response()->json([
                 'success' => true,
-                'message' => 'Booking request has been approved.',
+                'message' => 'Booking request has been approved and confirmed.',
                 'data'    => $bookingRequest->fresh('getBooking'),
             ]);
         } catch (Exception $e) {

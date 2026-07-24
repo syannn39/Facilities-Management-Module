@@ -14,7 +14,32 @@ export default function MyBookings() {
   const loadRequests = () => {
     setLoading(true);
     api.get('/bookings')
-      .then(res => setRequests(res.data.data || []))
+       .then(res => {
+        const rawData = res.data.data || [];
+
+        // Sorting Logic
+        const sortedData = rawData.sort((a, b) => {
+          // Assign weights based on status for sorting: Pending < Approved/Confirmed < Rejected/Cancelled/Completed
+          const getWeight = (req) => {
+            if (req.status === 'Pending') return 1;
+            const bookingStatus = req.get_booking?.status;
+            if (req.status === 'Approved' || bookingStatus === 'Confirmed') return 2;
+            return 3; 
+          };
+
+          const weightA = getWeight(a);
+          const weightB = getWeight(b);
+
+          if (weightA !== weightB) {
+            return weightA - weightB;
+          }
+
+          // If weights are the same, sort by booking time from newest to oldest
+          return new Date(b.start_time) - new Date(a.start_time);
+        });
+
+        setRequests(sortedData);
+      })
       .catch(() => setError('Could not load your bookings.'))
       .finally(() => setLoading(false));
   };

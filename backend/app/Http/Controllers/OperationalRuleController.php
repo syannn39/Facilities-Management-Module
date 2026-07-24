@@ -20,6 +20,11 @@ class OperationalRuleController extends Controller
             'advance_booking_limit' => 'required|integer|min:0',
             'opening_time'          => 'required|date_format:H:i:s',
             'closing_time'          => 'required|date_format:H:i:s',
+            'latitude'              => 'nullable|numeric|between:-90,90',
+            'longitude'             => 'nullable|numeric|between:-180,180',
+            'checkin_radius_meters' => 'nullable|integer|min:0',
+            'is_shared_facility'    => 'required|boolean',
+            'concurrent_booking_limit' => 'required|integer|min:1',
         ]);
 
         // 2. updateOrCreate using the fully validated data

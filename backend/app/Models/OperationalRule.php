@@ -35,6 +35,8 @@ class OperationalRule extends Model
         'latitude',             // GPS check-in verification — see migration note
         'longitude',
         'checkin_radius_meters',
+        'is_shared_facility',   
+        'concurrent_booking_limit',
     ];
 
     protected $casts = [
@@ -45,6 +47,8 @@ class OperationalRule extends Model
         'latitude' => 'float',
         'longitude' => 'float',
         'checkin_radius_meters' => 'integer',
+        'is_shared_facility' => 'boolean',
+        'concurrent_booking_limit' => 'integer',
     ];
 
     public function facility(): BelongsTo

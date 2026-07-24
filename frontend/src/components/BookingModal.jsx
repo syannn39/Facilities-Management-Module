@@ -22,6 +22,7 @@ import Calendar, { toLocalDateKey } from './Calendar';
  */
 export default function BookingModal({ facility, onClose, onBooked }) {
   const requiresApproval = (facility.get_operational_rule?.approval_tier ?? 0) > 0;
+  const advanceLimitDays = facility.get_operational_rule?.advance_booking_limit;
   const todayKey = toLocalDateKey(new Date());
 
   const [step, setStep] = useState('form'); // 'form' | 'confirm'
@@ -49,6 +50,35 @@ export default function BookingModal({ facility, onClose, onBooked }) {
       .catch(err => console.error("Failed to load maintenance blocks", err));
 
   }, [facility.facility_id, selectedDate]); // 2. Add selectedDate so it re-runs when clicking a new day
+
+  // Helper: Check if slot start time has already passed (Only applies if selectedDate is today)
+  const isSlotPassed = (slotStart) => {
+    if (selectedDate !== todayKey) return false;
+    
+    const now = new Date();
+    const [h, m] = slotStart.split(':').map(Number);
+    
+    const slotTime = new Date();
+    slotTime.setHours(h, m, 0, 0);
+
+    return now > slotTime;
+  };
+
+  // Helper: Check if selected date exceeds advance booking limit
+  const isBeyondAdvanceLimit = () => {
+    if (!advanceLimitDays) return false;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const targetDate = new Date(`${selectedDate}T00:00:00`);
+    const diffTime = targetDate - today;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    return diffDays > advanceLimitDays;
+  };
+
+  const beyondLimit = isBeyondAdvanceLimit();
 
   // helper function (Timezone & String-safe)
   const isMaintenanceSlot = (slotStart, slotEnd) => {
@@ -85,7 +115,7 @@ export default function BookingModal({ facility, onClose, onBooked }) {
       .finally(() => setSlotsLoading(false));
   }, [facility.facility_id, selectedDate]);
 
-  const canProceed = selectedSlot && (!requiresApproval || (purpose.trim() && guestCount > 0));
+  const canProceed = selectedSlot && !beyondLimit && (!requiresApproval || (purpose.trim() && guestCount > 0));
 
   const handleConfirm = async () => {
     setSubmitting(true);
@@ -139,6 +169,12 @@ export default function BookingModal({ facility, onClose, onBooked }) {
               <button onClick={onClose} style={styles.closeBtn}>×</button>
             </div>
 
+            {beyondLimit && (
+              <div style={styles.advanceLimitBanner}>
+                ⚠ Selected date exceeds the maximum advance booking limit ({advanceLimitDays} days). Slots are locked.
+              </div>
+            )}
+
             <div style={styles.bodyRow}>
               <div>
                 <p style={styles.sectionLabel}>Select Date</p>
@@ -156,24 +192,46 @@ export default function BookingModal({ facility, onClose, onBooked }) {
                   {!slotsLoading && slots.map((slot) => {
                     const isSelected = selectedSlot?.start === slot.start;
                     const isMaintenance = !slot.available && isMaintenanceSlot(slot.start, slot.end);
+                    const isPassed = isSlotPassed(slot.start);
+
+                    // Combine disable logic: disabled if beyond limit, already passed, or slot taken
+                    const isDisabled = beyondLimit || isPassed || !slot.available;
+
+                    // Determine correct label text and color
+                    let labelText = '';
+                    let labelColor = '#888';
+
+                    if (beyondLimit) {
+                      labelText = 'Too Far in Advance';
+                      labelColor = '#946200';
+                    } else if (isPassed) {
+                      labelText = 'Passed';
+                      labelColor = '#888';
+                    } else if (isMaintenance) {
+                      labelText = 'Maintenance';
+                      labelColor = '#ef6c00';
+                    } else if (!slot.available) {
+                      labelText = 'Booked';
+                      labelColor = '#c00';
+                    }
 
                     return (
                       <button
                         key={slot.start}
                         type="button"
-                        disabled={!slot.available}
+                        disabled={isDisabled}
                         onClick={() => setSelectedSlot(slot)}
                         style={{
                           ...styles.slotBtn,
                           ...(isSelected ? styles.slotBtnSelected : {}),
-                          ...(!slot.available ? styles.slotBtnTaken : {}),
+                          ...(isDisabled ? styles.slotBtnTaken : {}),
                         }}
                       >
                         {slot.start} - {slot.end}
                         {isSelected && <span style={styles.dot}>●</span>}
-                        {!slot.available && (
-                          <span style={isMaintenance ? styles.maintenanceLabel : styles.takenLabel}>
-                            {isMaintenance ? 'Maintenance' : 'Booked'}
+                        {isDisabled && (
+                          <span style={{ ...styles.takenLabel, color: labelColor }}>
+                            {labelText}
                           </span>
                         )}
                       </button>
@@ -278,6 +336,7 @@ const styles = {
   title: { margin: 0, fontSize: 17, color: '#1a1a2e' },
   subtitle: { margin: '4px 0 0', fontSize: 12.5, color: '#888' },
   closeBtn: { border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#999', lineHeight: 1 },
+  advanceLimitBanner: { background: '#fffbeb', border: '1px solid #fef3c7', color: '#b45309', padding: '8px 12px', borderRadius: 8, fontSize: '12px', marginBottom: 14, fontWeight: 600 },
   bodyRow: { display: 'flex', gap: 20, flexWrap: 'wrap' },
   sectionLabel: { fontSize: 12.5, fontWeight: 600, color: '#444', margin: '0 0 8px' },
   slotColumn: { flex: 1, minWidth: 200 },
@@ -296,8 +355,7 @@ const styles = {
   slotBtnSelected: { background: '#f5f5fa', fontWeight: 700, color: '#1a1a2e' },
   slotBtnTaken: { color: '#bbb', textDecoration: 'line-through', cursor: 'not-allowed', background: 'transparent' },
   dot: { fontSize: 8, marginRight: 6 },
-  takenLabel: { fontSize: 10.5, textDecoration: 'none', color: '#c00', fontWeight: 600 },
-  maintenanceLabel: { fontSize: 10.5, textDecoration: 'none', color: '#ef6c00', fontWeight: 600 },
+  takenLabel: { fontSize: '10.5px', textDecoration: 'none', fontWeight: 600 },
   textarea: {
     width: '100%', minHeight: 60, borderRadius: 8, border: '1px solid #e1e4e8',
     padding: 10, fontSize: 13, fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box',

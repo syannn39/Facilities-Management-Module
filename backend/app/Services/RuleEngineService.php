@@ -98,7 +98,10 @@ class RuleEngineService
 
     public function validateAdvanceLimit(\App\Models\OperationalRule $rule, Carbon $startTime): bool
     {
-        $daysAhead = Carbon::now()->diffInDays($startTime, false);
+        $today = Carbon::now()->startOfDay();
+        $targetDate = $startTime->copy()->startOfDay();
+
+        $daysAhead = $today->diffInDays($targetDate, false);
 
         return $daysAhead <= $rule->advance_booking_limit;
     }

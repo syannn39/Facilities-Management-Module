@@ -7,7 +7,7 @@ export default function MyBookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [scanningBookingId, setScanningBookingId] = useState(null);
-  
+
   // State to control the currently selected Request object for the modal popup
   const [selectedRequest, setSelectedRequest] = useState(null);
 
@@ -44,7 +44,7 @@ export default function MyBookings() {
   return (
     <div>
       <p style={styles.instructionHint}>✨ Click any booking card to view full details and manage actions.</p>
-      
+
       <div style={styles.list}>
         {requests.map((req) => {
           const info = describeRequest(req);
@@ -52,14 +52,14 @@ export default function MyBookings() {
           const facility = req.facility || req.get_facility;
 
           return (
-            <div 
-              key={req.request_id} 
+            <div
+              key={req.request_id}
               style={styles.card}
               onClick={() => setSelectedRequest(req)} // Click to open details popup
             >
               <div style={styles.cardLeft}>
                 <div style={styles.facilityName}>{facility?.name || 'Facility'}</div>
-                
+
                 {facility?.location ? (
                   <div style={styles.locationRow}>
                     📍 {facility.location}
@@ -88,7 +88,7 @@ export default function MyBookings() {
         const info = describeRequest(req);
         const booking = req.get_booking;
         const facility = req.facility || req.get_facility;
-        
+
         // Show purpose or guest count only if purpose exists or guest_count is strictly greater than 0
         const hasPurposeOrGuests = req.purpose_of_use || (req.guest_count !== null && req.guest_count !== undefined && req.guest_count > 0);
 
@@ -102,7 +102,7 @@ export default function MyBookings() {
         return (
           <div style={styles.modalOverlay} onClick={() => setSelectedRequest(null)}>
             <div style={styles.detailModal} onClick={(e) => e.stopPropagation()}>
-              
+
               {/* Modal Header */}
               <div style={styles.modalHeader}>
                 <div>
@@ -114,7 +114,7 @@ export default function MyBookings() {
 
               {/* Modal Body Content */}
               <div style={styles.modalBody}>
-                
+
                 {/* Status Banner */}
                 <div style={{ ...styles.statusBanner, background: info.badgeBg, color: info.badgeColor }}>
                   Status: <strong>{info.label}</strong>
@@ -150,12 +150,18 @@ export default function MyBookings() {
                 </div>
 
                 {/* Show rejection reason if status is Rejected */}
-                {req.status === 'Rejected' && (
-                  <div style={styles.reasonBox}>
-                    <span style={styles.reasonTitle}>❌ Rejection Reason</span>
-                    <p style={styles.reasonText}>{req.remarks || req.admin_remarks || 'No remarks provided by manager.'}</p>
-                  </div>
-                )}
+                {req.status === 'Rejected' && (() => {
+                  const logs = req.get_approval_logs || req.approval_logs || [];
+                  const rejectionLog = logs.find(log => log.action === 'Rejected') || logs[0];
+                  const reasonText = rejectionLog?.remarks || req.remarks || req.admin_remarks || 'No remarks provided by manager.';
+
+                  return (
+                    <div style={styles.reasonBox}>
+                      <span style={styles.reasonTitle}>❌ Rejection Reason</span>
+                      <p style={styles.reasonText}>{reasonText}</p>
+                    </div>
+                  );
+                })()}
 
                 {/* Show cancellation note if applicable */}
                 {info.note && (
@@ -169,12 +175,12 @@ export default function MyBookings() {
               <div style={styles.modalFooter}>
                 {/* Show Scan QR Code button for both Confirmed bookings and Approved requests */}
                 {canTakeActions && (
-                  <button 
-                    style={styles.scanBtnModal} 
-                    onClick={() => { 
+                  <button
+                    style={styles.scanBtnModal}
+                    onClick={() => {
                       const targetId = booking ? booking.booking_id : req.request_id;
-                      setSelectedRequest(null); 
-                      setScanningBookingId(targetId); 
+                      setSelectedRequest(null);
+                      setScanningBookingId(targetId);
                     }}
                   >
                     📱 Scan QR Code
@@ -249,15 +255,15 @@ const styles = {
   hint: { fontSize: 14, color: '#888', textAlign: 'center', padding: '20px 0' },
   instructionHint: { fontSize: 13, color: '#666', marginBottom: '14px', fontStyle: 'italic' },
   list: { display: 'flex', flexDirection: 'column', gap: 12 },
-  
-  card: { 
-    border: '1px solid #e1e4e8', 
-    borderRadius: 12, 
-    padding: '16px 20px', 
-    background: '#fff', 
-    display: 'flex', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+
+  card: {
+    border: '1px solid #e1e4e8',
+    borderRadius: 12,
+    padding: '16px 20px',
+    background: '#fff',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 10,
     cursor: 'pointer',
     boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
@@ -265,27 +271,27 @@ const styles = {
   },
   cardLeft: { flex: 1 },
   facilityName: { fontWeight: 700, fontSize: 15.5, color: '#1a1a2e' },
-  locationRow: { fontSize: 12.5, color: '#555', marginTop: 4 }, 
+  locationRow: { fontSize: 12.5, color: '#555', marginTop: 4 },
   timeRow: { fontSize: 12.5, color: '#666', marginTop: 6 },
-  
+
   cardRight: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 },
   badge: { fontSize: 11.5, fontWeight: 700, borderRadius: 12, padding: '4px 12px' },
   detailsPrompt: { fontSize: '11.5px', color: '#64748b', fontWeight: 600 },
 
   // Modal overlay and container styles
-  modalOverlay: { 
-    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', 
-    display: 'flex', alignItems: 'center', justifyContent: 'center', 
-    zIndex: 1000, backdropFilter: 'blur(3px)' 
+  modalOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 1000, backdropFilter: 'blur(3px)'
   },
-  detailModal: { 
-    background: '#fff', borderRadius: 16, width: 480, maxWidth: '92vw', 
+  detailModal: {
+    background: '#fff', borderRadius: 16, width: 480, maxWidth: '92vw',
     boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
     overflow: 'hidden', animation: 'scaleUp 0.2s ease'
   },
-  modalHeader: { 
-    padding: '20px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', 
-    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' 
+  modalHeader: {
+    padding: '20px 24px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'
   },
   modalTitle: { margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' },
   modalSubtitle: { margin: '4px 0 0', fontSize: 13, color: '#64748b' },
@@ -293,7 +299,7 @@ const styles = {
 
   modalBody: { padding: '24px' },
   statusBanner: { padding: '10px 16px', borderRadius: 8, fontSize: '13px', fontWeight: 600, marginBottom: '20px', textAlign: 'center' },
-  
+
   infoSection: { display: 'flex', flexDirection: 'column', gap: '14px', background: '#f8fafc', padding: '16px', borderRadius: '10px', border: '1px solid #f1f5f9' },
   infoGroup: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   infoLabel: { fontSize: '13px', color: '#64748b', fontWeight: 500 },
@@ -305,9 +311,9 @@ const styles = {
 
   noteBox: { fontSize: '13px', marginTop: '16px', padding: '10px 14px', background: '#f1f5f9', borderRadius: 8 },
 
-  modalFooter: { 
-    padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', 
-    display: 'flex', justifyContent: 'flex-end', gap: '10px', alignItems: 'center' 
+  modalFooter: {
+    padding: '16px 24px', background: '#f8fafc', borderTop: '1px solid #e2e8f0',
+    display: 'flex', justifyContent: 'flex-end', gap: '10px', alignItems: 'center'
   },
   scanBtnModal: { padding: '9px 16px', borderRadius: 8, border: 'none', background: '#1a1a2e', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' },
   cancelBtnModal: { backgroundColor: '#dc3545', color: 'white', padding: '9px 16px', border: 'none', borderRadius: 8, fontSize: '13px', fontWeight: 600, cursor: 'pointer' },

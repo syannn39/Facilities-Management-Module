@@ -38,7 +38,7 @@ class BookingController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $requests = BookingRequest::with(['facility', 'getBooking.getCheckIn'])
+        $requests = BookingRequest::with(['facility', 'getBooking.getCheckIn', 'getApprovalLogs'])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('start_time')
             ->get();

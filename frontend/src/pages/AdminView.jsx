@@ -10,6 +10,8 @@ export default function AdminView() {
     return localStorage.getItem('admin_active_tab') || 'facilities';
   });
 
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+
   // --- FACILITIES STATE ---
   const [facilities, setFacilities] = useState([]);
   const [workflowTiers, setWorkflowTiers] = useState([]);
@@ -441,6 +443,43 @@ export default function AdminView() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const sortedFacilities = React.useMemo(() => {
+  let sortableItems = [...facilities];
+  if (sortConfig !== null) {
+    sortableItems.sort((a, b) => {
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+      
+      // Handle nested values (like capacity inside get_operational_rule)
+      if (sortConfig.key === 'capacity') {
+        aValue = a.get_operational_rule?.max_capacity || 0;
+        bValue = b.get_operational_rule?.max_capacity || 0;
+      } else if (sortConfig.key === 'advance_booking_limit') {
+        aValue = a.get_operational_rule?.advance_booking_limit || 0;
+        bValue = b.get_operational_rule?.advance_booking_limit || 0;
+      }
+
+      // Convert strings to lowercase for accurate alphabetical sorting
+      if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+      if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  return sortableItems;
+}, [facilities, sortConfig]);
+
+// Helper for the headers
+const requestSort = (key) => {
+  let direction = 'asc';
+  if (sortConfig.key === key && sortConfig.direction === 'asc') {
+    direction = 'desc';
+  }
+  setSortConfig({ key, direction });
+};
+
   return (
     <div style={styles.appWrapper}>
 
@@ -479,23 +518,33 @@ export default function AdminView() {
               <table style={styles.table}>
                 <thead>
                   <tr style={styles.tableHeadRow}>
-                    <th style={styles.th}>Facility Name</th>
+                    <th style={{ ...styles.th, cursor: 'pointer' }} onClick={() => requestSort('name')}>
+                      Facility Name {sortConfig.key === 'name' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
                     <th style={styles.th}>Image</th>
-                    <th style={styles.th}>Category</th>
-                    <th style={styles.th}>Capacity</th>
-                    <th style={styles.th}>Advance Booking Limit</th>
+                    <th style={{ ...styles.th, cursor: 'pointer' }} onClick={() => requestSort('category')}>
+                      Category {sortConfig.key === 'category' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
+                    <th style={{ ...styles.th, cursor: 'pointer' }} onClick={() => requestSort('capacity')}>
+                      Capacity {sortConfig.key === 'capacity' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
+                    <th style={{ ...styles.th, cursor: 'pointer' }} onClick={() => requestSort('advance_booking_limit')}>
+                      Advance Booking Limit {sortConfig.key === 'advance_booking_limit' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
                     <th style={styles.th}>Approval Tier</th>
-                    <th style={styles.th}>Status</th>
+                    <th style={{ ...styles.th, cursor: 'pointer' }} onClick={() => requestSort('status')}>
+                      Status {sortConfig.key === 'status' ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+                    </th>
                     <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingFacilities ? (
                     <tr><td colSpan="8" style={styles.emptyState}>Loading facilities...</td></tr>
-                  ) : facilities.length === 0 ? (
+                  ) : sortedFacilities.length === 0 ? (
                     <tr><td colSpan="8" style={styles.emptyState}>No facilities found.</td></tr>
                   ) : (
-                    facilities.map((facility) => {
+                    sortedFacilities.map((facility) => { 
                       const rowId = facility.id || facility.facility_id;
                       return (
                         <tr key={rowId} style={styles.tableRow}>
@@ -614,7 +663,17 @@ export default function AdminView() {
                       <div style={styles.statsGrid}>
                         <div style={styles.statBox}><div style={{ fontSize: '24px', fontWeight: 'bold', color: '#1a73e8' }}>{viewingFacility.bookings_count || 0}</div><div style={styles.detailLabel}>Total Bookings</div></div>
                         <div style={styles.statBox}><div style={{ fontSize: '24px', fontWeight: 'bold', color: '#2e7d32' }}>{viewingFacility.bookings_count > 0 ? 'Active' : 'N/A'}</div><div style={styles.detailLabel}>Utilization Rate</div></div>
-                        <div style={styles.statBox}><div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef6c00' }}>{viewingFacility.pending_requests_count || 0}</div><div style={styles.detailLabel}>Pending Requests</div></div>
+                        <div style={{ ...styles.statBox, cursor: 'pointer', transition: 'background-color 0.2s' }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff3e0'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fafafa'}
+                          onClick={() => {
+                            setViewingFacility(null); // Close the modal
+                            setActiveTab('approvals'); // Switch the tab
+                          }}
+                        >
+                        <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef6c00' }}>{viewingFacility.pending_requests_count || 0}</div>
+                        <div style={styles.detailLabel}>Pending Requests <span style={{fontSize: '10px'}}>↗</span></div>
+                      </div>
                       </div>
                     </div>
                   </div>

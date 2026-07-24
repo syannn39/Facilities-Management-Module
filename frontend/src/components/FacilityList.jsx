@@ -4,16 +4,6 @@ import BookingModal from './BookingModal';
 
 /**
  * FacilityList — the "Browse Facilities" page (reference screens 2 & 4).
- *
- * No tenant filtering logic lives here on purpose: GET /api/facilities
- * already returns only the logged-in user's tenant facilities (enforced by
- * the backend's TenantScope), so a School account and a Residential account
- * hitting this exact same component will simply receive different lists.
- *
- * Clicking "Book Now" opens BookingModal for that facility. On success,
- * facilities are re-fetched (capacity/labels could change), a toast-style
- * confirmation message is shown, and onBookingCreated() fires so the parent
- * (TenantView) can tell My Bookings to refetch the next time it's shown.
  */
 export default function FacilityList({ onBookingCreated }) {
   const [facilities,      setFacilities]      = useState([]);
@@ -52,6 +42,27 @@ export default function FacilityList({ onBookingCreated }) {
       <div style={styles.grid}>
         {facilities.map((facility) => {
           const requiresApproval = (facility.get_operational_rule?.approval_tier ?? 0) > 0;
+          
+          // facilities can have a status of "active", "inactive", or "maintenance". We want to disable the booking button if the facility is not available for booking.
+          const status = facility.status ? facility.status.trim().toLowerCase() : 'active';
+          const isInactive = status === 'inactive';
+          const isMaintenance = status === 'maintenance';
+          const isBlocked = isInactive || isMaintenance;
+
+          // Determine the badge text and color based on the facility's status
+          let badgeText = 'Available';
+          let badgeBg = '#e6ffed';
+          let badgeColor = '#1e7e34';
+
+          if (isInactive) {
+            badgeText = 'Inactive';
+            badgeBg = '#fee2e2';
+            badgeColor = '#991b1b';
+          } else if (isMaintenance) {
+            badgeText = 'Maintenance';
+            badgeBg = '#fef3c7';
+            badgeColor = '#92400e';
+          }
 
           return (
             <div key={facility.facility_id} style={styles.card}>
@@ -60,7 +71,9 @@ export default function FacilityList({ onBookingCreated }) {
                   <div style={styles.cardName}>{facility.name}</div>
                   {facility.category && <div style={styles.cardDesc}>{facility.category}</div>}
                 </div>
-                <span style={styles.availableBadge}>Available</span>
+                <span style={{ ...styles.availableBadge, background: badgeBg, color: badgeColor }}>
+                  {badgeText}
+                </span>
               </div>
 
               <div style={styles.cardMeta}>
@@ -83,8 +96,16 @@ export default function FacilityList({ onBookingCreated }) {
                 {requiresApproval && <span style={styles.requiresApproval}>Requires Approval</span>}
               </div>
 
-              <button style={styles.bookBtn} onClick={() => setActiveFacility(facility)}>
-                Book Now <span style={{ marginLeft: 4 }}>→</span>
+              {/* Booking Button */}
+              <button
+                disabled={isBlocked}
+                style={{
+                  ...styles.bookBtn,
+                  ...(isBlocked ? styles.bookBtnDisabled : {}),
+                }}
+                onClick={() => !isBlocked && setActiveFacility(facility)}
+              >
+                {isInactive ? 'Facility Inactive' : isMaintenance ? 'Under Maintenance' : <>Book Now <span style={{ marginLeft: 4 }}>→</span></>}
               </button>
             </div>
           );
@@ -150,8 +171,6 @@ const styles = {
   availableBadge: {
     fontSize: 11,
     fontWeight: 700,
-    color: '#1e7e34',
-    background: '#e6ffed',
     borderRadius: 12,
     padding: '3px 10px',
     whiteSpace: 'nowrap',
@@ -181,5 +200,10 @@ const styles = {
     fontWeight: 600,
     fontSize: 13.5,
     cursor: 'pointer',
+  },
+  bookBtnDisabled: {
+    background: '#e4e4e7',
+    color: '#71717a',
+    cursor: 'not-allowed',
   },
 };

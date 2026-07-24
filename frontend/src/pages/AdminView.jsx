@@ -559,14 +559,29 @@ const requestSort = (key) => {
                           <td style={{ ...styles.td, textTransform: 'capitalize' }}>{facility.category || 'Standard'}</td>
                           <td style={styles.td}>{facility.get_operational_rule?.max_capacity || 'N/A'}</td>
                           <td style={styles.td}>{facility.get_operational_rule?.advance_booking_limit ? `${facility.get_operational_rule.advance_booking_limit} days` : 'Not set'}</td>
-                          <td style={styles.td}><span style={styles.tierBadge}>{(() => {// Look up the exact tier based on the nested approval_tier ID
-                            const tierId = facility.get_operational_rule?.approval_tier;
-                            if (!tierId || tierId === 0) return 'Auto-Approve (Tier 0)';
+                          <td style={styles.td}>
+                            <span style={styles.tierBadge}>
+                              {(() => {
+                                const ruleId = facility.get_operational_rule?.rule_id || facility.get_operational_rule?.id;
+                                const tierLevel = facility.get_operational_rule?.approval_tier;
+                                
+                                if (!tierLevel || tierLevel === 0) return 'Auto-Approve (Tier 0)';
 
-                            const matchedTier = workflowTiers.find(t => (t.id || t.tier_id) === tierId);
-                            return matchedTier ? `Tier ${matchedTier.tier_level} (${matchedTier.assigned_role})` : `Tier ${tierId}`;
-                          })()}
-                          </span>
+                                // CORRECT LOGIC: Match by rule_id AND tier_level, not the Primary Key!
+                                const matchedTier = workflowTiers.find(t => 
+                                  t.rule_id === ruleId && t.tier_level === tierLevel
+                                );
+                                
+                                if (matchedTier) {
+                                    return `Tier ${matchedTier.tier_level} (${matchedTier.assigned_role})`;
+                                }
+                                
+                                // Fallback display if the specific tier hasn't loaded
+                                return tierLevel === 1 ? 'Tier 1 (Property Manager)' : 
+                                      tierLevel === 2 ? 'Tier 2 (JMB Member)' : 
+                                      `Tier ${tierLevel}`;
+                              })()}
+                            </span>
                           </td>
                           <td style={styles.td}><span style={facility.status === 'active' ? styles.statusActive : styles.statusWarning}>{facility.status || 'Active'}</span></td>
 
@@ -795,20 +810,14 @@ const requestSort = (key) => {
                     <div style={styles.inputGroup}>
                       <label style={styles.label}>Approval Tier</label>
                       <select name="workflow_tier_id" value={formData.workflow_tier_id} onChange={handleInputChange} style={styles.input}>
-                        <option value="">Auto-Approve (Tier 0)</option>
+                        <option value="0">Auto-Approve (Tier 0)</option>
                         {workflowTiers
-                          // Filter out duplicate tiers by checking the tier_level
-                          .filter((tier, index, self) =>
-                            index === self.findIndex(t => t.tier_level === tier.tier_level)
-                          )
-                          .map(tier => {
-                            const tId = tier.tier_id || tier.id;
-                            return (
-                              <option key={tId} value={tId}>
-                                Tier {tier.tier_level} ({tier.assigned_role} Approval)
-                              </option>
-                            );
-                          })}
+                          .filter((tier, index, self) => index === self.findIndex(t => t.tier_level === tier.tier_level))
+                          .map(tier => (
+                            <option key={tier.tier_id || tier.id} value={tier.tier_level}>
+                              Tier {tier.tier_level} ({tier.assigned_role} Approval)
+                            </option>
+                          ))}
                       </select>
                     </div>
                     <div style={styles.inputGroup}>

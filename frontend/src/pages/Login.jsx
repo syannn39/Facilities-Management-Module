@@ -27,13 +27,16 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
-  // Quick-fill helpers so you don't have to type during testing
+  // Quick-fill helpers updated to match the new tiered seeder data
   const TEST_ACCOUNTS = {
-    resident: 'resident@test.com', // Sunrise Residences (residential)
-    manager:  'manager@test.com',  // Sunrise Residences (residential)
-    student:  'student@test.com',  // Greenwood International School
-    staff:    'staff@test.com',    // Greenwood International School
+    resident: 'resident@test.com', // Sunrise (Tier 0)
+    manager:  'manager@test.com',  // Sunrise (Tier 1)
+    jmb:      'jmb@test.com',      // Sunrise (Tier 2)
+    student:  'student@test.com',  // Greenwood (Tier 0)
+    lecturer: 'lecturer@test.com', // Greenwood (Tier 1)
+    dean:     'dean@test.com',     // Greenwood (Tier 2)
   };
+  
   const fill = (accountKey) => {
     setEmail(TEST_ACCOUNTS[accountKey]);
     setPassword('password');
@@ -88,21 +91,27 @@ export default function Login({ onLoginSuccess }) {
 
           <p style={styles.quickFillGroupLabel}>🏢 Sunrise Residences</p>
           <div style={styles.quickFillBtns}>
-            <button style={styles.chipBtn} onClick={() => fill('resident')}>
+            <button type="button" style={styles.chipBtn} onClick={() => fill('resident')}>
               👤 Resident
             </button>
-            <button style={styles.chipBtn} onClick={() => fill('manager')}>
-              🔑 Manager
+            <button type="button" style={styles.chipBtn} onClick={() => fill('manager')}>
+              🔑 Tier 1 (Manager)
+            </button>
+            <button type="button" style={styles.chipBtn} onClick={() => fill('jmb')}>
+              👑 Tier 2 (JMB)
             </button>
           </div>
 
           <p style={styles.quickFillGroupLabel}>🎓 Greenwood International School</p>
           <div style={styles.quickFillBtns}>
-            <button style={styles.chipBtn} onClick={() => fill('student')}>
+            <button type="button" style={styles.chipBtn} onClick={() => fill('student')}>
               👤 Student
             </button>
-            <button style={styles.chipBtn} onClick={() => fill('staff')}>
-              🔑 Staff
+            <button type="button" style={styles.chipBtn} onClick={() => fill('lecturer')}>
+              🔑 Tier 1 (Lecturer)
+            </button>
+            <button type="button" style={styles.chipBtn} onClick={() => fill('dean')}>
+              👑 Tier 2 (Dean)
             </button>
           </div>
 
@@ -219,6 +228,7 @@ const styles = {
     display: 'flex',
     gap: 8,
     justifyContent: 'center',
+    flexWrap: 'wrap', // Added flexWrap so they stack nicely on smaller screens
   },
   chipBtn: {
     padding: '6px 14px',

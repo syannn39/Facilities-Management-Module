@@ -65,7 +65,19 @@ function App() {
   if (!user) return <Login onLoginSuccess={setUser} />
 
   // ── Logged in ──────────────────────────────────────────────────────────────
-  const isManager = user.role === 'Manager'
+  
+  // FIX: Array of all roles that should be granted Admin/Management access
+  const managementRoles = [
+    'Manager', 
+    'Property Manager', 
+    'JMB Member', 
+    'Lecturer', 
+    'Head of Department'
+  ]
+  
+  // Check if the current user's role exists in our management array
+  const isManager = managementRoles.includes(user.role)
+  
   const theme = TENANT_THEME[user.tenant?.type] || DEFAULT_THEME
 
   return (

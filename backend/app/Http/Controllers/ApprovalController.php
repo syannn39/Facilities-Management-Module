@@ -24,12 +24,19 @@ class ApprovalController extends Controller
     {
         $manager = $request->user();
 
+        // 1. STRICT TENANT ISOLATION
+        // Only fetch pending requests that belong to this manager's building
         $allPending = BookingRequest::with('facility.getOperationalRule', 'user')
+            ->where('tenant_id', $manager->tenant_id)
             ->where('status', 'Pending')
             ->get();
 
+        // 2. STRICT WORKFLOW ESCALATION (RBAC)
+        // Filter out requests that are waiting for a different tier
         $pending = $allPending->filter(function (BookingRequest $bookingRequest) use ($manager) {
             $tier = $this->workflowService->getNextApprover($bookingRequest);
+            
+            // Only returns true if the current active tier requires this user's specific role
             return $tier && $manager->hasRole($tier->assigned_role);
         })->values();
 

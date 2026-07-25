@@ -18,45 +18,45 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // ── Tenant 1: Residential (Apartment / Condo) ───────────────────────
+        // ── Tenant 1: Residential (Sunrise Residences) ───────────────────────
         $residentialFacilities = $this->createTenantWithFacilities(
             tenantName: 'Sunrise Residences',
             tenantType: 'residential',
             contactEmail: 'admin@sunrise-residences.test',
             address: '12 Sunrise Boulevard, Petaling Jaya',
-            residentEmail: 'resident@test.com',
+            residentEmails: ['resident@test.com', 'resident2@test.com'], 
             tier1Email: 'manager@test.com', // Property Manager
-            tier2Email: 'jmb@test.com',     // JMB Member
+            tier2Email: 'jmb@test.com',    // JMB Member
             facilities: [
                 ['name' => 'Tennis Court',       'category' => 'Sports',      'approval_tier' => 0, 'max_capacity' => 4,   'open' => '08:00:00', 'close' => '20:00:00', 'is_shared' => false, 'limit' => 1],
                 ['name' => 'Gym',                'category' => 'Fitness',     'approval_tier' => 0, 'max_capacity' => 15,  'open' => '06:00:00', 'close' => '22:00:00', 'is_shared' => true, 'limit' => 15],
                 ['name' => 'BBQ Pit',            'category' => 'Recreation',  'approval_tier' => 1, 'max_capacity' => 20,  'open' => '08:00:00', 'close' => '22:00:00', 'is_shared' => false, 'limit' => 1],
-                // Upgraded to Tier 2 for escalation testing!
                 ['name' => 'Multi-Purpose Hall', 'category' => 'Event Space', 'approval_tier' => 2, 'max_capacity' => 100, 'open' => '09:00:00', 'close' => '23:00:00', 'is_shared' => false, 'limit' => 1],
                 ['name' => 'Swimming Pool',      'category' => 'Recreation',  'approval_tier' => 0, 'max_capacity' => 30,  'open' => '07:00:00', 'close' => '21:00:00', 'is_shared' => true, 'limit' => 30],
                 ['name' => 'Karaoke Room',       'category' => 'Entertainment',  'approval_tier' => 0, 'max_capacity' => 10,  'open' => '07:00:00', 'close' => '21:00:00', 'is_shared' => false, 'limit' => 1],
             ],
         );
+        // ── Tenant 1: Residential (Sunrise Residences) ───────────────────────
+        $primaryResident = User::where('email', 'resident@test.com')->first();
+        if ($primaryResident) {
+            $this->seedSampleBookings($primaryResident, $residentialFacilities);
+        }
 
-        $resident = User::where('email', 'resident@test.com')->first();
-        $this->seedSampleBookings($resident, $residentialFacilities);
-
-        // ── Tenant 2: School (Campus) ────────────────────────────────────────
+        // ── Tenant 2: School (Greenwood International School) ────────────────
         $this->createTenantWithFacilities(
             tenantName: 'Greenwood International School',
             tenantType: 'school',
             contactEmail: 'admin@greenwood.test',
             address: '88 Greenwood Avenue, Subang Jaya',
-            residentEmail: 'student@test.com',
-            tier1Email: 'lecturer@test.com', // Lecturer
-            tier2Email: 'dean@test.com',     // Head of Department
+            residentEmails: ['student@test.com'],
+            tier1Email: 'lecturer@test.com',
+            tier2Email: 'dean@test.com',
             facilities: [
                 ['name' => 'Library Discussion Room', 'category' => 'Study / Group Work', 'approval_tier' => 0, 'max_capacity' => 8,   'open' => '08:00:00', 'close' => '18:00:00', 'is_shared' => false, 'limit' => 1],
-                ['name' => 'Computer Lab',             'category' => 'IT / Coding Class',  'approval_tier' => 0, 'max_capacity' => 30,  'open' => '08:00:00', 'close' => '18:00:00', 'is_shared' => true, 'limit' => 30],
-                ['name' => 'Sports Field',             'category' => 'Outdoor Sports',     'approval_tier' => 0, 'max_capacity' => 50,  'open' => '07:00:00', 'close' => '19:00:00', 'is_shared' => true, 'limit' => 20],
-                // Upgraded to Tier 2
-                ['name' => 'School Hall',              'category' => 'Assembly / Events',  'approval_tier' => 2, 'max_capacity' => 300, 'open' => '08:00:00', 'close' => '20:00:00', 'is_shared' => false, 'limit' => 1],
-                ['name' => 'Science Laboratory',       'category' => 'Practical Class',    'approval_tier' => 1, 'max_capacity' => 25,  'open' => '08:00:00', 'close' => '17:00:00', 'is_shared' => false, 'limit' => 1],
+                ['name' => 'Computer Lab',            'category' => 'IT / Coding Class',  'approval_tier' => 0, 'max_capacity' => 30,  'open' => '08:00:00', 'close' => '18:00:00', 'is_shared' => true, 'limit' => 30],
+                ['name' => 'Sports Field',            'category' => 'Outdoor Sports',     'approval_tier' => 0, 'max_capacity' => 50,  'open' => '07:00:00', 'close' => '19:00:00', 'is_shared' => true, 'limit' => 20],
+                ['name' => 'School Hall',             'category' => 'Assembly / Events',  'approval_tier' => 2, 'max_capacity' => 300, 'open' => '08:00:00', 'close' => '20:00:00', 'is_shared' => false, 'limit' => 1],
+                ['name' => 'Science Laboratory',      'category' => 'Practical Class',    'approval_tier' => 1, 'max_capacity' => 25,  'open' => '08:00:00', 'close' => '17:00:00', 'is_shared' => false, 'limit' => 1],
             ],
         );
     }
@@ -66,34 +66,37 @@ class DatabaseSeeder extends Seeder
         string $tenantType,
         string $contactEmail,
         string $address,
-        string $residentEmail,
+        array $residentEmails,
         string $tier1Email,
         string $tier2Email,
         array $facilities,
     ): array {
-        $tenant = Tenant::create([
-            'tenant_name'   => $tenantName,
-            'contact_email' => $contactEmail,
-            'address'       => $address,
-            'type'          => $tenantType,
-        ]);
+        $tenant = Tenant::firstOrCreate(
+            ['tenant_name' => $tenantName], 
+            [
+                'contact_email' => $contactEmail,
+                'address'       => $address,
+                'type'          => $tenantType,
+            ]
+        );
 
-        // Define exact roles based on environment
         $userRole = $tenantType === 'residential' ? 'Resident' : 'Student';
         $tier1Role = $tenantType === 'residential' ? 'Property Manager' : 'Lecturer';
         $tier2Role = $tenantType === 'residential' ? 'JMB Member' : 'Head of Department';
 
-        // Use firstOrCreate to prevent duplicate errors!
-        User::firstOrCreate(
-            ['email' => $residentEmail], // The unique thing to check
-            [
-                'name'      => "Test {$tenantType} User",
-                'password'  => 'password',
-                'tenant_id' => $tenant->tenant_id,
-                'role'      => $userRole,
-                'phone_number' => '+60123456789',
-            ]
-        );
+        // Create multiple users for the same tenant
+        foreach ($residentEmails as $index => $email) {
+            User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name'         => $index === 0 ? "Test {$tenantType} User" : "Test {$tenantType} User " . ($index + 1),
+                    'password'     => 'password',
+                    'tenant_id'    => $tenant->tenant_id,
+                    'role'         => $userRole,
+                    'phone_number' => '+6012345678' . $index,
+                ]
+            );
+        }
 
         User::firstOrCreate(
             ['email' => $tier1Email],
@@ -135,24 +138,24 @@ class DatabaseSeeder extends Seeder
                 'opening_time'           => $def['open'],
                 'closing_time'           => $def['close'],
                 'advance_booking_limit'  => 30,
-                'grace_period_minutes'   => 15, 
+                'grace_period_minutes'   => 15,
                 'is_shared_facility'     => $def['is_shared'],
-                'concurrent_booking_limit'=> $def['limit']
+                'concurrent_booking_limit' => $def['limit']
             ]);
 
             // Dynamically assign Workflow Tiers based on the facility's requirement
             if ($def['approval_tier'] >= 1) {
                 \App\Models\WorkflowTier::create([
-                    'rule_id'       => $rule->rule_id, 
+                    'rule_id'       => $rule->rule_id,
                     'tier_level'    => 1,
-                    'assigned_role' => $tier1Role 
+                    'assigned_role' => $tier1Role
                 ]);
             }
             if ($def['approval_tier'] >= 2) {
                 \App\Models\WorkflowTier::create([
-                    'rule_id'       => $rule->rule_id, 
+                    'rule_id'       => $rule->rule_id,
                     'tier_level'    => 2,
-                    'assigned_role' => $tier2Role 
+                    'assigned_role' => $tier2Role
                 ]);
             }
 
@@ -164,27 +167,36 @@ class DatabaseSeeder extends Seeder
 
     private function seedSampleBookings(User $user, array $facilities): void
     {
+        // Check if the user already has booking requests to avoid duplicate seeding
+        if (BookingRequest::where('user_id', $user->id)->exists()) {
+            return;
+        }
+
         $this->makeInstantBooking(
-            $user, $facilities['Tennis Court'],
+            $user,
+            $facilities['Tennis Court'],
             Carbon::now()->addDays(2)->setTime(14, 0),
             Carbon::now()->addDays(2)->setTime(16, 0),
         );
 
         $this->makeInstantBooking(
-            $user, $facilities['Gym'],
+            $user,
+            $facilities['Gym'],
             Carbon::now()->addDays(4)->setTime(8, 0),
             Carbon::now()->addDays(4)->setTime(9, 0),
         );
 
         $this->makeInstantBooking(
-            $user, $facilities['Swimming Pool'],
+            $user,
+            $facilities['Swimming Pool'],
             Carbon::now()->subDays(5)->setTime(10, 0),
             Carbon::now()->subDays(5)->setTime(12, 0),
             checkedIn: true,
         );
 
         $this->makeInstantBooking(
-            $user, $facilities['Tennis Court'],
+            $user,
+            $facilities['Tennis Court'],
             Carbon::now()->subDays(6)->setTime(16, 0),
             Carbon::now()->subDays(6)->setTime(18, 0),
             noShow: true,
@@ -215,7 +227,7 @@ class DatabaseSeeder extends Seeder
             'purpose_of_use' => 'Large scale event',
             'guest_count'    => 80,
         ]);
-        
+
         BookingRequest::create([
             'tenant_id'      => $user->tenant_id,
             'facility_id'    => $facilities['Multi-Purpose Hall']->facility_id,

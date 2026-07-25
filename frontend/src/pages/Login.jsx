@@ -27,14 +27,15 @@ export default function Login({ onLoginSuccess }) {
     }
   };
 
-  // Quick-fill helpers updated to match the new tiered seeder data
+  // Quick-fill helpers updated to match the new tiered seeder data (including resident2)
   const TEST_ACCOUNTS = {
-    resident: 'resident@test.com', // Sunrise (Tier 0)
-    manager:  'manager@test.com',  // Sunrise (Tier 1)
-    jmb:      'jmb@test.com',      // Sunrise (Tier 2)
-    student:  'student@test.com',  // Greenwood (Tier 0)
-    lecturer: 'lecturer@test.com', // Greenwood (Tier 1)
-    dean:     'dean@test.com',     // Greenwood (Tier 2)
+    resident:  'resident@test.com',  // Sunrise (Tier 0)
+    resident2: 'resident2@test.com', // Sunrise (Second Resident for concurrency testing)
+    manager:   'manager@test.com',   // Sunrise (Tier 1)
+    jmb:       'jmb@test.com',       // Sunrise (Tier 2)
+    student:   'student@test.com',   // Greenwood (Tier 0)
+    lecturer:  'lecturer@test.com',  // Greenwood (Tier 1)
+    dean:      'dean@test.com',      // Greenwood (Tier 2)
   };
   
   const fill = (accountKey) => {
@@ -92,7 +93,10 @@ export default function Login({ onLoginSuccess }) {
           <p style={styles.quickFillGroupLabel}>🏢 Sunrise Residences</p>
           <div style={styles.quickFillBtns}>
             <button type="button" style={styles.chipBtn} onClick={() => fill('resident')}>
-              👤 Resident
+              👤 Resident 1
+            </button>
+            <button type="button" style={styles.chipBtn} onClick={() => fill('resident2')}>
+              👥 Resident 2
             </button>
             <button type="button" style={styles.chipBtn} onClick={() => fill('manager')}>
               🔑 Tier 1 (Manager)
@@ -139,7 +143,7 @@ const styles = {
     borderRadius: 16,
     padding: '40px 36px',
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420, // 稍微调宽了一点以容纳新增的按钮
     boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
   },
   brand: {
@@ -226,16 +230,16 @@ const styles = {
   },
   quickFillBtns: {
     display: 'flex',
-    gap: 8,
+    gap: 6,
     justifyContent: 'center',
-    flexWrap: 'wrap', // Added flexWrap so they stack nicely on smaller screens
+    flexWrap: 'wrap',
   },
   chipBtn: {
-    padding: '6px 14px',
+    padding: '6px 12px',
     border: '1.5px solid #ddd',
     borderRadius: 20,
     background: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     cursor: 'pointer',
     color: '#444',
   },

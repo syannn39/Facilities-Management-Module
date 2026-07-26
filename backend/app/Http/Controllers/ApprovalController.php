@@ -25,7 +25,6 @@ class ApprovalController extends Controller
         $manager = $request->user();
 
         // 1. STRICT TENANT ISOLATION
-        // Only fetch pending requests that belong to this manager's building
         $allPending = BookingRequest::with('facility.getOperationalRule', 'user')
             ->where('tenant_id', $manager->tenant_id)
             ->where('status', 'Pending')
@@ -35,8 +34,6 @@ class ApprovalController extends Controller
         // Filter out requests that are waiting for a different tier
         $pending = $allPending->filter(function (BookingRequest $bookingRequest) use ($manager) {
             $tier = $this->workflowService->getNextApprover($bookingRequest);
-            
-            // Only returns true if the current active tier requires this user's specific role
             return $tier && $manager->hasRole($tier->assigned_role);
         })->values();
 
@@ -51,7 +48,6 @@ class ApprovalController extends Controller
      */
     public function approve(Request $request, int $request_id): JsonResponse
     {
-        // Optional remarks when approving
         $validated = $request->validate([
             'remarks' => 'nullable|string',
         ]);
@@ -59,25 +55,13 @@ class ApprovalController extends Controller
         $bookingRequest = BookingRequest::findOrFail($request_id);
 
         try {
-            // 1. Identify the current workflow tier
-            $tier = $this->workflowService->getNextApprover($bookingRequest);
-            $tierLevel = $tier ? $tier->tier_level : 1;
-
-            // 2. Explicitly write to the approval_logs table
-            ApprovalLog::logAction(
-                $bookingRequest->request_id,
-                $request->user()->id,
-                $tierLevel,
-                'Approved',
-                $validated['remarks'] ?? null
-            );
-            
-            // 3. Delegate the actual status transition and booking creation to WorkflowService
-            $this->workflowService->processApproval($bookingRequest, $request->user());
+            // Completely delegate to the WorkflowService. 
+            // Do NOT manually insert the ApprovalLog here!
+            $this->workflowService->processApproval($bookingRequest, $request->user(), $validated['remarks'] ?? null);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Booking request has been approved and confirmed.',
+                'message' => 'Booking request has been approved and escalated.',
                 'data'    => $bookingRequest->fresh('getBooking'),
             ]);
         } catch (Exception $e) {
@@ -100,19 +84,7 @@ class ApprovalController extends Controller
         $bookingRequest = BookingRequest::findOrFail($request_id);
 
         try {
-            // 1. Identify the current workflow tier
-            $tier = $this->workflowService->getNextApprover($bookingRequest);
-            $tierLevel = $tier ? $tier->tier_level : 1;
-
-            // 2. Explicitly write to the approval_logs table
-            ApprovalLog::logAction(
-                $bookingRequest->request_id,
-                $request->user()->id,
-                $tierLevel,
-                'Rejected',
-                $validated['remarks']
-            );
-
+            // Completely delegate to the WorkflowService.
             $this->workflowService->processRejection($bookingRequest, $request->user(), $validated['remarks']);
 
             return response()->json([

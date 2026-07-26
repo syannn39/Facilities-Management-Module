@@ -11,22 +11,9 @@ use Exception;
 /**
  * WorkflowService — Class Diagram Figure 4.3.3.
  *
- * Genuinely new functionality: this is what makes WorkflowTier actually
- * do something. Before this existed, WorkflowTier had zero real usage —
- * WorkflowTierController::process() was a standalone mock endpoint that
- * never persisted anything, and ApprovalLogController was an empty stub.
- *
- * Design simplification (documented since it's a real scope decision,
- * not hidden): this implements a SINGLE current tier per request — the
- * lowest tier_level not yet satisfied — rather than requiring every tier
- * to approve in parallel. routeToApprover() finds who's allowed to act on
- * the request right now; once they approve, isFullyApproved() checks
- * whether that was the last tier; if not, the request just keeps waiting
- * (still Pending) for the next tier's approver. A full N-of-N parallel
- * sign-off model would need an extra "which tiers have already signed
- * off" table — out of scope here, since OperationalRule.approval_tier
- * (a single int) is what currently drives whether approval is needed at
- * all, and there's no existing UI for a multi-person review queue.
+ * Enforces sequential state-machine logic for multi-tier approvals.
+ * Dynamically routes requests through intermediate states (e.g., Pending -> 
+ * Approved (Tier 1) -> Approved) based on the facility's operational rules.
  */
 
 class WorkflowService
@@ -43,20 +30,37 @@ class WorkflowService
 
     public function getNextApprover(BookingRequest $request): ?WorkflowTier
     {
-        // 1. Get the rule (might be null if the database was wiped!)
         $rule = $request->facility->getOperationalRule;
-        $tier = null;
         
-        // 2. Only look for a specific tier if the rule actually exists
-        if ($rule) {
-            $tier = WorkflowTier::where('rule_id', $rule->rule_id)->first();
+        // 1. If no rule or Auto-Approve is set, no human approver is needed
+        if (!$rule || $rule->approval_tier <= 0) {
+            return null; 
         }
+
+        // 2. Count how many approvals this request ALREADY has
+        $currentApprovalCount = ApprovalLog::where('request_id', $request->request_id)
+            ->where('action', 'Approved')
+            ->count();
+
+        // 3. The level we are looking for is the next sequential step
+        $nextTierLevel = $currentApprovalCount + 1;
+
+        // 4. If we've already met or exceeded the required tiers, workflow is complete
+        if ($currentApprovalCount >= $rule->approval_tier) {
+            return null;
+        }
+
+        // 5. Fetch the SPECIFIC tier level needed right now
+        $tier = WorkflowTier::where('rule_id', $rule->rule_id)
+            ->where('tier_level', $nextTierLevel)
+            ->first();
         
-        // 3. The bulletproof fallback (Creates an in-memory manager tier)
+        // 6. The bulletproof fallback (Creates an in-memory tier if DB is missing rows)
         if (!$tier) {
             $defaultTier = new WorkflowTier();
-            $defaultTier->assigned_role = 'Manager';
-            $defaultTier->tier_level = 1;
+            // Dynamically assign role based on the expected level
+            $defaultTier->assigned_role = $nextTierLevel === 1 ? 'Property Manager' : 'JMB Member';
+            $defaultTier->tier_level = $nextTierLevel;
             return $defaultTier; 
         }
         
@@ -92,7 +96,7 @@ class WorkflowService
         return $tiersApproved >= min($totalTiers, $rule->approval_tier);
     }
 
-    public function processApproval(BookingRequest $request, User $approver): bool
+    public function processApproval(BookingRequest $request, User $approver, ?string $remarks = null): bool
     {
         $tier = $this->getNextApprover($request);
 
@@ -100,26 +104,27 @@ class WorkflowService
             throw new Exception('This request has no pending approval tier.');
         }
 
+        // RBAC Authorization Check
         $isManager = ($approver->hasRole('Manager') && ($tier->assigned_role === 'Facility Manager' || $tier->assigned_role === 'Manager'));
         
         if (!$approver->hasRole($tier->assigned_role) && !$isManager) {
             throw new Exception("Only a user with the '{$tier->assigned_role}' role can approve this tier.");
         }
 
-        // Log the approval action (Note: ApprovalController might have already logged it, 
-        // but checking prevents duplicate log creation if called sequentially)
+        // Log the approval action
         $alreadyLogged = ApprovalLog::where('request_id', $request->request_id)
             ->where('approver_id', $approver->id)
             ->where('action', 'Approved')
             ->exists();
 
         if (!$alreadyLogged) {
-            ApprovalLog::logAction($request->request_id, $approver->id, $tier->tier_level, 'Approved');
+            // Pass the remarks through to the logAction
+            ApprovalLog::logAction($request->request_id, $approver->id, $tier->tier_level, 'Approved', $remarks);
         }
 
-        // Check if fully approved now
+        // DYNAMIC STATE MACHINE ESCALATION
         if ($this->isFullyApproved($request)) {
-            // 1. Mark request status as Approved
+            // 1. Fully approved! Mark request status as Approved
             $request->update(['status' => 'Approved']);
 
             // 2. CREATE THE BOOKING ROW & SCHEDULE VIA SCHEDULING SERVICE
@@ -127,7 +132,12 @@ class WorkflowService
             
             // 3. Send notification
             $this->notificationService->sendApprovalNotification($request->fresh());
-        }
+        } 
+        
+        // FIX: We completely remove the 'else' block!
+        // If it is partially approved, we do nothing to the status. 
+        // It safely remains 'Pending' in the database, and dynamic 
+        // log-counting logic will automatically route it to Tier 2!
 
         return true;
     }
@@ -146,6 +156,7 @@ class WorkflowService
             ApprovalLog::logAction($request->request_id, $approver->id, $tierLevel, 'Rejected', $reason);
         }
 
+        // Rejection instantly terminates the workflow regardless of current tier
         $request->update(['status' => 'Rejected']);
 
         $this->notificationService->sendRejectionNotification($request, $reason);

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use App\Models\User;
 
 class WorkflowTierController extends Controller
 {
@@ -12,6 +14,41 @@ class WorkflowTierController extends Controller
     public function index()
     {
         //
+    }
+
+    /**
+     * GET /api/workflow-tiers/roles
+     * Fetch dynamic approval roles strictly scoped by tenant.
+     */
+   public function getTenantRoles(Request $request): JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+
+        // Fetch distinct roles for this specific tenant
+        $rawRoles = User::where('tenant_id', $tenantId)
+            // Filter out end-users AND the Admin/Property Manager who is configuring the system
+            ->whereNotIn('role', ['Resident', 'Student', 'Tenant', 'Property Manager', 'Admin', 'School Admin']) 
+            ->distinct()
+            ->pluck('role')
+            ->toArray();
+
+        // Custom sorting to ensure correct hierarchy (e.g., Lecturer before HOD)
+        usort($rawRoles, function ($a, $b) {
+            $hierarchy = [
+                'Property Manager' => 1, 'JMB Member' => 2, // Residential
+                'Lecturer' => 1, 'Head of Department' => 2  // Educational
+            ];
+            
+            $weightA = $hierarchy[$a] ?? 99;
+            $weightB = $hierarchy[$b] ?? 99;
+            
+            return $weightA <=> $weightB;
+        });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $rawRoles,
+        ]);
     }
 
     /**

@@ -109,4 +109,6 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // Protect this route with auth and ensure only Managers can hit it
     Route::post('/facilities/block', [FacilityController::class, 'blockFacility'])->middleware(['auth:sanctum']);
+
+    Route::get('/workflow-tiers/roles', [WorkflowTierController::class, 'getTenantRoles']);
 });

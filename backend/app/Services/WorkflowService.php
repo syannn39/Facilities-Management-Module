@@ -55,11 +55,12 @@ class WorkflowService
             ->where('tier_level', $nextTierLevel)
             ->first();
         
-        // 6. The bulletproof fallback (Creates an in-memory tier if DB is missing rows)
+        // 6. The Tenant-Agnostic Fallback
         if (!$tier) {
             $defaultTier = new WorkflowTier();
-            // Dynamically assign role based on the expected level
-            $defaultTier->assigned_role = $nextTierLevel === 1 ? 'Property Manager' : 'JMB Member';
+            // Fall back to a universal 'Manager' role instead of tenant-specific titles
+            // This ensures a generic admin can catch misconfigured facilities
+            $defaultTier->assigned_role = 'Manager'; 
             $defaultTier->tier_level = $nextTierLevel;
             return $defaultTier; 
         }

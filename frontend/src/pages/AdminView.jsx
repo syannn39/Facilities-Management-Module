@@ -15,6 +15,7 @@ export default function AdminView() {
   // --- FACILITIES STATE ---
   const [facilities, setFacilities] = useState([]);
   const [workflowTiers, setWorkflowTiers] = useState([]);
+  const [tenantRoles, setTenantRoles] = useState([]);
   const [loadingFacilities, setLoadingFacilities] = useState(true);
   const [error, setError] = useState(null);
 
@@ -63,6 +64,7 @@ export default function AdminView() {
     if (activeTab === 'facilities') {
       fetchFacilities();
       fetchWorkflowTiers();
+      fetchTenantRoles();
     } else if (activeTab === 'approvals') {
       fetchBookingRequests();
     } else if (activeTab === 'reports') {
@@ -96,6 +98,15 @@ export default function AdminView() {
       setWorkflowTiers(response.data.data || response.data);
     } catch (err) {
       console.error("Failed to fetch workflow tiers:", err);
+    }
+  };
+
+  const fetchTenantRoles = async () => {
+    try {
+      const response = await api.get('/workflow-tiers/roles');
+      setTenantRoles(response.data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch tenant roles:", err);
     }
   };
 
@@ -576,10 +587,8 @@ const requestSort = (key) => {
                                     return `Tier ${matchedTier.tier_level} (${matchedTier.assigned_role})`;
                                 }
                                 
-                                // Fallback display if the specific tier hasn't loaded
-                                return tierLevel === 1 ? 'Tier 1 (Property Manager)' : 
-                                      tierLevel === 2 ? 'Tier 2 (JMB Member)' : 
-                                      `Tier ${tierLevel}`;
+                                // Clean fallback display that works for both schools and residences
+                                return `Tier ${tierLevel} Approval`;
                               })()}
                             </span>
                           </td>
@@ -811,13 +820,15 @@ const requestSort = (key) => {
                       <label style={styles.label}>Approval Tier</label>
                       <select name="workflow_tier_id" value={formData.workflow_tier_id} onChange={handleInputChange} style={styles.input}>
                         <option value="0">Auto-Approve (Tier 0)</option>
-                        {workflowTiers
-                          .filter((tier, index, self) => index === self.findIndex(t => t.tier_level === tier.tier_level))
-                          .map(tier => (
-                            <option key={tier.tier_id || tier.id} value={tier.tier_level}>
-                              Tier {tier.tier_level} ({tier.assigned_role} Approval)
-                            </option>
-                          ))}
+                        {/* Dynamically map the tenant's specific roles */}
+                        {tenantRoles.map((role, index) => {
+                            const tierLevel = index + 1;
+                            return (
+                                <option key={role} value={tierLevel}>
+                                    Tier {tierLevel} ({role} Approval)
+                                </option>
+                            );
+                        })}
                       </select>
                     </div>
                     <div style={styles.inputGroup}>

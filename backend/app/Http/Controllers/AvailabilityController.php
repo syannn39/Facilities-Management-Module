@@ -41,8 +41,23 @@ class AvailabilityController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // Security Gate: Check if user is Manager or Admin
-        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+        // Security Gate: Flexible Role Alias Check
+        $userRole = strtolower(trim($request->user()->role ?? ''));
+        $authorizedRoles = [
+            'admin', 'school admin', 'manager', 'property manager', 
+            'facility manager', 'jmb member', 'lecturer', 'head of department'
+        ];
+        
+        $isManagement = in_array($userRole, $authorizedRoles) 
+                     || str_contains($userRole, 'manager') 
+                     || str_contains($userRole, 'admin');
+
+        // Fallback to strict method check just in case
+        $hasMethodRole = method_exists($request->user(), 'hasRole') 
+            ? ($request->user()->hasRole('Manager') || $request->user()->hasRole('Admin') || $request->user()->hasRole('Property Manager')) 
+            : false;
+
+        if (!$isManagement && !$hasMethodRole) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. Only management can modify availability.'
@@ -72,7 +87,23 @@ class AvailabilityController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
-        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+        // Security Gate: Flexible Role Alias Check
+        $userRole = strtolower(trim($request->user()->role ?? ''));
+        $authorizedRoles = [
+            'admin', 'school admin', 'manager', 'property manager', 
+            'facility manager', 'jmb member', 'lecturer', 'head of department'
+        ];
+        
+        $isManagement = in_array($userRole, $authorizedRoles) 
+                     || str_contains($userRole, 'manager') 
+                     || str_contains($userRole, 'admin');
+
+        // Fallback to strict method check just in case
+        $hasMethodRole = method_exists($request->user(), 'hasRole') 
+            ? ($request->user()->hasRole('Manager') || $request->user()->hasRole('Admin') || $request->user()->hasRole('Property Manager')) 
+            : false;
+
+        if (!$isManagement && !$hasMethodRole) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. Only management can modify availability.'
@@ -105,7 +136,23 @@ class AvailabilityController extends Controller
      */
     public function blockSlot(Request $request, int $id): JsonResponse
     {
-        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+        // Security Gate: Flexible Role Alias Check
+        $userRole = strtolower(trim($request->user()->role ?? ''));
+        $authorizedRoles = [
+            'admin', 'school admin', 'manager', 'property manager', 
+            'facility manager', 'jmb member', 'lecturer', 'head of department'
+        ];
+        
+        $isManagement = in_array($userRole, $authorizedRoles) 
+                     || str_contains($userRole, 'manager') 
+                     || str_contains($userRole, 'admin');
+
+        // Fallback to strict method check just in case
+        $hasMethodRole = method_exists($request->user(), 'hasRole') 
+            ? ($request->user()->hasRole('Manager') || $request->user()->hasRole('Admin') || $request->user()->hasRole('Property Manager')) 
+            : false;
+
+        if (!$isManagement && !$hasMethodRole) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. Only management can modify availability.'
@@ -129,7 +176,23 @@ class AvailabilityController extends Controller
      */
     public function unblockSlot(Request $request, int $id): JsonResponse
     {
-        if (!$request->user()->hasRole('Manager') && !$request->user()->hasRole('Admin')) {
+        // Security Gate: Flexible Role Alias Check
+        $userRole = strtolower(trim($request->user()->role ?? ''));
+        $authorizedRoles = [
+            'admin', 'school admin', 'manager', 'property manager', 
+            'facility manager', 'jmb member', 'lecturer', 'head of department'
+        ];
+        
+        $isManagement = in_array($userRole, $authorizedRoles) 
+                     || str_contains($userRole, 'manager') 
+                     || str_contains($userRole, 'admin');
+
+        // Fallback to strict method check just in case
+        $hasMethodRole = method_exists($request->user(), 'hasRole') 
+            ? ($request->user()->hasRole('Manager') || $request->user()->hasRole('Admin') || $request->user()->hasRole('Property Manager')) 
+            : false;
+
+        if (!$isManagement && !$hasMethodRole) {
             return response()->json([
                 'success' => false,
                 'message' => 'Unauthorized. Only management can modify availability.'

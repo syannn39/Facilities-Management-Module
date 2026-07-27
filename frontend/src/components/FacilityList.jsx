@@ -6,11 +6,11 @@ import BookingModal from './BookingModal';
  * FacilityList — the "Browse Facilities" page (reference screens 2 & 4).
  */
 export default function FacilityList({ onBookingCreated }) {
-  const [facilities,      setFacilities]      = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [error,           setError]           = useState('');
-  const [activeFacility,  setActiveFacility]  = useState(null); // facility being booked, or null
-  const [successMessage,  setSuccessMessage]  = useState('');
+  const [facilities, setFacilities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [activeFacility, setActiveFacility] = useState(null); // facility being booked, or null
+  const [successMessage, setSuccessMessage] = useState('');
 
   const loadFacilities = () => {
     setLoading(true);
@@ -43,7 +43,7 @@ export default function FacilityList({ onBookingCreated }) {
         {facilities.map((facility) => {
           const approvalTier = facility.get_operational_rule?.approval_tier ?? 0;
           const requiresApproval = approvalTier > 0;
-          
+
           // facilities can have a status of "active", "inactive", or "maintenance".
           const status = facility.status ? facility.status.trim().toLowerCase() : 'active';
           const isInactive = status === 'inactive';
@@ -67,6 +67,12 @@ export default function FacilityList({ onBookingCreated }) {
 
           return (
             <div key={facility.facility_id} style={styles.card}>
+
+              {facility.image_url && (
+                <div style={styles.imageContainer}>
+                  <img src={facility.image_url} alt={facility.name} style={styles.facilityImage} />
+                </div>
+              )}
               <div style={styles.cardTopRow}>
                 <div>
                   <div style={styles.cardName}>{facility.name}</div>
@@ -208,5 +214,18 @@ const styles = {
     background: '#e4e4e7',
     color: '#71717a',
     cursor: 'not-allowed',
+  },
+  imageContainer: {
+    width: '100%',
+    height: '140px',
+    overflow: 'hidden',
+    borderRadius: '8px',
+    marginBottom: '12px',
+    backgroundColor: '#f3f4f6',
+  },
+  facilityImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
   },
 };

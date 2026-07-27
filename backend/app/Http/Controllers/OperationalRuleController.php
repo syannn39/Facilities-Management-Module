@@ -51,7 +51,7 @@ class OperationalRuleController extends Controller
 
             // Fetch this specific tenant's roles (just like we did for the frontend dropdown)
             $rawRoles = User::where('tenant_id', $tenantId)
-                ->whereNotIn('role', ['Resident', 'Student', 'Tenant', 'Property Manager', 'Admin', 'School Admin'])
+                ->whereNotIn('role', ['Resident', 'Student', 'Tenant', 'Admin', 'School Admin'])
                 ->distinct()
                 ->pluck('role')
                 ->toArray();

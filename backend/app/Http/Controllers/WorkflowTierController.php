@@ -26,8 +26,8 @@ class WorkflowTierController extends Controller
 
         // Fetch distinct roles for this specific tenant
         $rawRoles = User::where('tenant_id', $tenantId)
-            // Filter out end-users AND the Admin/Property Manager who is configuring the system
-            ->whereNotIn('role', ['Resident', 'Student', 'Tenant', 'Property Manager', 'Admin', 'School Admin']) 
+            // Filter out end-users AND the Admin who is configuring the system
+            ->whereNotIn('role', ['Resident', 'Student', 'Tenant', 'Admin', 'School Admin']) 
             ->distinct()
             ->pluck('role')
             ->toArray();
